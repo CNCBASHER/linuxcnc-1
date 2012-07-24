@@ -121,7 +121,7 @@ int emcec_el2521_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
 
   // alloc hal memory
   if ((hal_data = hal_malloc(sizeof(emcec_el2521_data_t))) == NULL) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "hal_malloc() for slave %d:%d failed\n", master->index, slave->index);
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "hal_malloc() for slave %s.%s failed\n", master->name, slave->name);
     return -EIO;
   }
   memset(hal_data, 0, sizeof(emcec_el2521_data_t));
@@ -159,66 +159,66 @@ int emcec_el2521_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
   EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x7000, 0x02, &hal_data->freq_pdo_os, NULL);
 
   // export pins
-  if ((err = hal_pin_s32_newf(HAL_OUT, &(hal_data->count), comp_id, "%s.%d.%d.stp-counts", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-counts failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_pin_s32_newf(HAL_OUT, &(hal_data->count), comp_id, "%s.%s.%s.stp-counts", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-counts failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
-  if ((err = hal_pin_float_newf(HAL_OUT, &(hal_data->pos_fb), comp_id, "%s.%d.%d.stp-pos-fb", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-pos-fb failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_pin_float_newf(HAL_OUT, &(hal_data->pos_fb), comp_id, "%s.%s.%s.stp-pos-fb", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-pos-fb failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
-  if ((err = hal_pin_bit_newf(HAL_OUT, &(hal_data->ramp_active), comp_id, "%s.%d.%d.stp-ramp-active", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-ramp-active failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_pin_bit_newf(HAL_OUT, &(hal_data->ramp_active), comp_id, "%s.%s.%s.stp-ramp-active", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-ramp-active failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
-  if ((err = hal_pin_bit_newf(HAL_IN, &(hal_data->ramp_disable), comp_id, "%s.%d.%d.stp-ramp-disable", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-ramp-disable failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_pin_bit_newf(HAL_IN, &(hal_data->ramp_disable), comp_id, "%s.%s.%s.stp-ramp-disable", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-ramp-disable failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
-  if ((err = hal_pin_bit_newf(HAL_OUT, &(hal_data->in_z), comp_id, "%s.%d.%d.stp-in-z", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-in-z failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_pin_bit_newf(HAL_OUT, &(hal_data->in_z), comp_id, "%s.%s.%s.stp-in-z", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-in-z failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
-  if ((err = hal_pin_bit_newf(HAL_OUT, &(hal_data->in_z_not), comp_id, "%s.%d.%d.stp-in-z-not", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-in-z-not failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_pin_bit_newf(HAL_OUT, &(hal_data->in_z_not), comp_id, "%s.%s.%s.stp-in-z-not", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-in-z-not failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
-  if ((err = hal_pin_bit_newf(HAL_OUT, &(hal_data->in_t), comp_id, "%s.%d.%d.stp-in-t", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-in-t failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_pin_bit_newf(HAL_OUT, &(hal_data->in_t), comp_id, "%s.%s.%s.stp-in-t", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-in-t failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
-  if ((err = hal_pin_bit_newf(HAL_OUT, &(hal_data->in_t_not), comp_id, "%s.%d.%d.stp-in-t-not", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-in-t-not failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_pin_bit_newf(HAL_OUT, &(hal_data->in_t_not), comp_id, "%s.%s.%s.stp-in-t-not", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-in-t-not failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
-  if ((err = hal_pin_bit_newf(HAL_IN, &(hal_data->enable), comp_id, "%s.%d.%d.stp-enable", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-enable failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_pin_bit_newf(HAL_IN, &(hal_data->enable), comp_id, "%s.%s.%s.stp-enable", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-enable failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
-  if ((err = hal_pin_float_newf(HAL_IN, &(hal_data->vel_cmd), comp_id, "%s.%d.%d.stp-velo-cmd", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-velo-cmd failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_pin_float_newf(HAL_IN, &(hal_data->vel_cmd), comp_id, "%s.%s.%s.stp-velo-cmd", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-velo-cmd failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
 
   // export parameters
-  if ((err = hal_param_float_newf(HAL_RO, &(hal_data->freq), comp_id, "%s.%d.%d.stp-freq", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-freq failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_param_float_newf(HAL_RO, &(hal_data->freq), comp_id, "%s.%s.%s.stp-freq", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-freq failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
-  if ((err = hal_param_float_newf(HAL_RO, &(hal_data->maxvel), comp_id, "%s.%d.%d.stp-maxvel", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-maxvel failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_param_float_newf(HAL_RO, &(hal_data->maxvel), comp_id, "%s.%s.%s.stp-maxvel", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-maxvel failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
-  if ((err = hal_param_float_newf(HAL_RO, &(hal_data->maxaccel_fall), comp_id, "%s.%d.%d.stp-maxaccel-fall", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-maxaccel-fall failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_param_float_newf(HAL_RO, &(hal_data->maxaccel_fall), comp_id, "%s.%s.%s.stp-maxaccel-fall", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-maxaccel-fall failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
-  if ((err = hal_param_float_newf(HAL_RO, &(hal_data->maxaccel_rise), comp_id, "%s.%d.%d.stp-maxaccel-rise", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-maxaccel-rise\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_param_float_newf(HAL_RO, &(hal_data->maxaccel_rise), comp_id, "%s.%s.%s.stp-maxaccel-rise", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-maxaccel-rise\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
-  if ((err = hal_param_float_newf(HAL_RW, &(hal_data->pos_scale), comp_id, "%s.%d.%d.stp-pos-scale", EMCEC_MODULE_NAME, master->index, slave->index)) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.stp-pos-scale failed\n", EMCEC_MODULE_NAME, master->index, slave->index);
+  if ((err = hal_param_float_newf(HAL_RW, &(hal_data->pos_scale), comp_id, "%s.%s.%s.stp-pos-scale", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.stp-pos-scale failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
 

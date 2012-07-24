@@ -47,7 +47,7 @@ int emcec_el1xxx_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
 
   // alloc hal memory
   if ((hal_data = hal_malloc(sizeof(emcec_el1xxx_pin_t) * slave->pdo_entry_count)) == NULL) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "hal_malloc() for slave %d:%d failed\n", master->index, slave->index);
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "hal_malloc() for slave %s.%s failed\n", master->name, slave->name);
     return -EIO;
   }
   memset(hal_data, 0, sizeof(emcec_el1xxx_pin_t) * slave->pdo_entry_count);
@@ -59,12 +59,12 @@ int emcec_el1xxx_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
     EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x6000 + (i << 4), 0x01, &pin->pdo_os, &pin->pdo_bp);
 
     // export pins
-    if ((err = hal_pin_bit_newf(HAL_OUT, &(pin->in), comp_id, "%s.%d.%d.din-%d", EMCEC_MODULE_NAME, master->index, slave->index, i)) != 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.din-%02d failed\n", EMCEC_MODULE_NAME, master->index, slave->index, i);
+    if ((err = hal_pin_bit_newf(HAL_OUT, &(pin->in), comp_id, "%s.%s.%s.din-%d", EMCEC_MODULE_NAME, master->name, slave->name, i)) != 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.din-%02d failed\n", EMCEC_MODULE_NAME, master->name, slave->name, i);
       return err;
     }
-    if ((err = hal_pin_bit_newf(HAL_OUT, &(pin->in_not), comp_id, "%s.%d.%d.din-%d-not", EMCEC_MODULE_NAME, master->index, slave->index, i)) != 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.din-%02d-not failed\n", EMCEC_MODULE_NAME, master->index, slave->index, i);
+    if ((err = hal_pin_bit_newf(HAL_OUT, &(pin->in_not), comp_id, "%s.%s.%s.din-%d-not", EMCEC_MODULE_NAME, master->name, slave->name, i)) != 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.din-%02d-not failed\n", EMCEC_MODULE_NAME, master->name, slave->name, i);
       return err;
     }
 

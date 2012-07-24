@@ -123,7 +123,7 @@ void emcec_request_lock(void *data);
 void emcec_release_lock(void *data);
 
 emcec_master_data_t *emcec_init_master_hal(const char *pfx);
-emcec_slave_state_t *emcec_init_slave_state_hal(int master_index, int slave_index);
+emcec_slave_state_t *emcec_init_slave_state_hal(char *master_name, char *slave_name);
 void emcec_update_master_hal(emcec_master_data_t *hal_data, ec_master_state_t *ms);
 void emcec_update_slave_state_hal(emcec_slave_state_t *hal_data, ec_slave_config_state_t *ss);
 
@@ -159,7 +159,7 @@ int rtapi_app_main(void) {
   for (master = first_master; master != NULL; master = master->next) {
     // request ethercat master
     if (!(master->master = ecrt_request_master(master->index))) {
-      rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "requesting master %d failed\n", master->index);
+      rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "requesting master %s (index %d) failed\n", master->name, master->index);
       goto fail2;
     }
 
@@ -168,7 +168,7 @@ int rtapi_app_main(void) {
 
     // create domain
     if (!(master->domain = ecrt_master_create_domain(master->master))) {
-      rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "master %d domain creation failed\n", master->index);
+      rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "master %s domain creation failed\n", master->name);
       goto fail2;
     }
 
@@ -177,7 +177,7 @@ int rtapi_app_main(void) {
     for (slave = master->first_slave; slave != NULL; slave = slave->next) {
       // read slave config
       if (!(slave->config = ecrt_master_slave_config(master->master, 0, slave->index, slave->vid, slave->pid))) {
-        rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "fail to read slave %d:%d configuration\n", master->index, slave->index);
+        rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "fail to read slave %s.%s configuration\n", master->name, slave->name);
         goto fail2;
       }
 
@@ -204,13 +204,13 @@ int rtapi_app_main(void) {
       // configure slave
       if (slave->sync_info != NULL) {
         if (ecrt_slave_config_pdos(slave->config, EC_END, slave->sync_info)) {
-          rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "fail to configure slave %d:%d\n", master->index, slave->index);
+          rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "fail to configure slave %s.%s\n", master->name, slave->name);
           goto fail2;
         }
       }
 
       // export state pins
-      if ((slave->hal_state_data = emcec_init_slave_state_hal(master->index, slave->index)) == NULL) {
+      if ((slave->hal_state_data = emcec_init_slave_state_hal(master->name, slave->name)) == NULL) {
         goto fail2;
       }
     }
@@ -220,13 +220,13 @@ int rtapi_app_main(void) {
 
     // register PDO entries
     if (ecrt_domain_reg_pdo_entry_list(master->domain, master->pdo_entry_regs)) {
-      rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "master %d PDO entry registration failed\n", master->index);
+      rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "master %s PDO entry registration failed\n", master->name);
       goto fail2;
     }
 
     // activating master
     if (ecrt_master_activate(master->master)) {
-      rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "failed to activate master %d\n", master->index);
+      rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "failed to activate master %s\n", master->name);
       goto fail2;
     }
 
@@ -235,21 +235,21 @@ int rtapi_app_main(void) {
     master->process_data_len = ecrt_domain_size(master->domain);
 
     // init hal data
-    rtapi_snprintf(name, HAL_NAME_LEN, "%s.%d", EMCEC_MODULE_NAME, master->index);
+    rtapi_snprintf(name, HAL_NAME_LEN, "%s.%s", EMCEC_MODULE_NAME, master->name);
     if ((master->hal_data = emcec_init_master_hal(name)) == NULL) {
       goto fail2;
     }
 
     // export read function
-    rtapi_snprintf(name, HAL_NAME_LEN, "%s.%d.read", EMCEC_MODULE_NAME, master->index);
+    rtapi_snprintf(name, HAL_NAME_LEN, "%s.%s.read", EMCEC_MODULE_NAME, master->name);
     if (hal_export_funct(name, emcec_read_master, master, 0, 0, comp_id) != 0) {
-      rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "master %d read funct export failed\n", master->index);
+      rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "master %s read funct export failed\n", master->name);
       goto fail2;
     }
     // export write function
-    rtapi_snprintf(name, HAL_NAME_LEN, "%s.%d.write", EMCEC_MODULE_NAME, master->index);
+    rtapi_snprintf(name, HAL_NAME_LEN, "%s.%s.write", EMCEC_MODULE_NAME, master->name);
     if (hal_export_funct(name, emcec_write_master, master, 0, 0, comp_id) != 0) {
-      rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "master %d write funct export failed\n", master->index);
+      rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "master %s write funct export failed\n", master->name);
       goto fail2;
     }
   }
@@ -362,7 +362,8 @@ int emcec_parse_config(void) {
 
         // initialize master
         master->index = master_conf->index;
-        master->name = master_conf->name;
+        strncpy(master->name, master_conf->name, EMCEC_CONF_STR_MAXLEN);
+        master->name[EMCEC_CONF_STR_MAXLEN - 1] = 0;
         rt_sem_init(&master->semaphore, 1);
         master->app_time = 0;
         master->app_time_period = master_conf->appTimePeriod;
@@ -398,13 +399,14 @@ int emcec_parse_config(void) {
         // create new slave
         slave = kzalloc(sizeof(emcec_slave_t), GFP_KERNEL);
         if (slave == NULL) {
-          rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unable to allocate slave %d:%d structure memory\n", master->index, slave_conf->index);
+          rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unable to allocate slave %s.%s structure memory\n", master->name, slave_conf->name);
           goto fail2;
         }      
 
         // initialize slave
         slave->index = slave_conf->index;
-        slave->name = slave_conf->name;
+        strncpy(slave->name, slave_conf->name, EMCEC_CONF_STR_MAXLEN);
+        slave->name[EMCEC_CONF_STR_MAXLEN - 1] = 0;
         slave->master = master;
         slave->vid = type->vid;
         slave->pid = type->pid;
@@ -438,7 +440,7 @@ int emcec_parse_config(void) {
         // create new dc config
         dc = kzalloc(sizeof(emcec_slave_dc_t), GFP_KERNEL);
         if (dc == NULL) {
-          rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unable to allocate slave %d:%d dc config memory\n", master->index, slave->index);
+          rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unable to allocate slave %s.%s dc config memory\n", master->name, slave->name);
           goto fail2;
         }      
 
@@ -466,7 +468,7 @@ int emcec_parse_config(void) {
         // create new dc config
         wd = kzalloc(sizeof(emcec_slave_watchdog_t), GFP_KERNEL);
         if (wd == NULL) {
-          rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unable to allocate slave %d:%d watchdog config memory\n", master->index, slave->index);
+          rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unable to allocate slave %s.%s watchdog config memory\n", master->name, slave->name);
           goto fail2;
         }      
 
@@ -490,7 +492,7 @@ int emcec_parse_config(void) {
   for (master = first_master; master != NULL; master = master->next) {
     pdo_entry_regs = kzalloc(sizeof(ec_pdo_entry_reg_t) * (master->pdo_entry_count + 1), GFP_KERNEL);
     if (pdo_entry_regs == NULL) {
-      rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unable to allocate master %d PDO entry memory\n", master->index);
+      rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unable to allocate master %s PDO entry memory\n", master->name);
       goto fail2;
     }
     master->pdo_entry_regs = pdo_entry_regs;      
@@ -612,39 +614,39 @@ emcec_master_data_t *emcec_init_master_hal(const char *pfx) {
   return hal_data;
 }
 
-emcec_slave_state_t *emcec_init_slave_state_hal(int master_index, int slave_index) {
+emcec_slave_state_t *emcec_init_slave_state_hal(char *master_name, char *slave_name) {
   emcec_slave_state_t *hal_data;
 
   // alloc hal data
   if ((hal_data = hal_malloc(sizeof(emcec_slave_state_t))) == NULL) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "hal_malloc() for %s.%d.%d failed\n", EMCEC_MODULE_NAME, master_index, slave_index);
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "hal_malloc() for %s.%s.%s failed\n", EMCEC_MODULE_NAME, master_name, slave_name);
     return NULL;
   }
   memset(hal_data, 0, sizeof(emcec_master_data_t));
 
   // export pins
-  if (hal_pin_bit_newf(HAL_OUT, &(hal_data->online), comp_id, "%s.%d.%d.slave-online", EMCEC_MODULE_NAME, master_index, slave_index) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.slaves-online failed\n", EMCEC_MODULE_NAME, master_index, slave_index);
+  if (hal_pin_bit_newf(HAL_OUT, &(hal_data->online), comp_id, "%s.%s.%s.slave-online", EMCEC_MODULE_NAME, master_name, slave_name) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.slaves-online failed\n", EMCEC_MODULE_NAME, master_name, slave_name);
     return NULL;
   }
-  if (hal_pin_bit_newf(HAL_OUT, &(hal_data->operational), comp_id, "%s.%d.%d.slave-oper", EMCEC_MODULE_NAME, master_index, slave_index) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.slaves-oper failed\n", EMCEC_MODULE_NAME, master_index, slave_index);
+  if (hal_pin_bit_newf(HAL_OUT, &(hal_data->operational), comp_id, "%s.%s.%s.slave-oper", EMCEC_MODULE_NAME, master_name, slave_name) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.slaves-oper failed\n", EMCEC_MODULE_NAME, master_name, slave_name);
     return NULL;
   }
-  if (hal_pin_bit_newf(HAL_OUT, &(hal_data->state_init), comp_id, "%s.%d.%d.slave-state-init", EMCEC_MODULE_NAME, master_index, slave_index) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.state-state-init failed\n", EMCEC_MODULE_NAME, master_index, slave_index);
+  if (hal_pin_bit_newf(HAL_OUT, &(hal_data->state_init), comp_id, "%s.%s.%s.slave-state-init", EMCEC_MODULE_NAME, master_name, slave_name) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.state-state-init failed\n", EMCEC_MODULE_NAME, master_name, slave_name);
     return NULL;
   }
-  if (hal_pin_bit_newf(HAL_OUT, &(hal_data->state_preop), comp_id, "%s.%d.%d.slave-state-preop", EMCEC_MODULE_NAME, master_index, slave_index) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.state-state-preop failed\n", EMCEC_MODULE_NAME, master_index, slave_index);
+  if (hal_pin_bit_newf(HAL_OUT, &(hal_data->state_preop), comp_id, "%s.%s.%s.slave-state-preop", EMCEC_MODULE_NAME, master_name, slave_name) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.state-state-preop failed\n", EMCEC_MODULE_NAME, master_name, slave_name);
     return NULL;
   }
-  if (hal_pin_bit_newf(HAL_OUT, &(hal_data->state_safeop), comp_id, "%s.%d.%d.slave-state-safeop", EMCEC_MODULE_NAME, master_index, slave_index) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.state-state-safeop failed\n", EMCEC_MODULE_NAME, master_index, slave_index);
+  if (hal_pin_bit_newf(HAL_OUT, &(hal_data->state_safeop), comp_id, "%s.%s.%s.slave-state-safeop", EMCEC_MODULE_NAME, master_name, slave_name) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.state-state-safeop failed\n", EMCEC_MODULE_NAME, master_name, slave_name);
     return NULL;
   }
-  if (hal_pin_bit_newf(HAL_OUT, &(hal_data->state_op), comp_id, "%s.%d.%d.slave-state-op", EMCEC_MODULE_NAME, master_index, slave_index) != 0) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%d.%d.state-state-op failed\n", EMCEC_MODULE_NAME, master_index, slave_index);
+  if (hal_pin_bit_newf(HAL_OUT, &(hal_data->state_op), comp_id, "%s.%s.%s.slave-state-op", EMCEC_MODULE_NAME, master_name, slave_name) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.state-state-op failed\n", EMCEC_MODULE_NAME, master_name, slave_name);
     return NULL;
   }
 
@@ -779,7 +781,7 @@ ec_sdo_request_t *emcec_read_sdo(struct emcec_slave *slave, uint16_t index, uint
 
   // create request
   if (!(sdo = ecrt_slave_config_create_sdo_request(slave->config, index, subindex, size))) {
-  rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "slave %d:%d: Failed to create SDO request (0x%04x:0x%02x)\n", master->index, slave->index, index, subindex);
+  rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "slave %s.%s: Failed to create SDO request (0x%04x:0x%02x)\n", master->name, slave->name, index, subindex);
       return NULL;
   }
 
@@ -796,7 +798,7 @@ ec_sdo_request_t *emcec_read_sdo(struct emcec_slave *slave, uint16_t index, uint
 
   // check state
   if (sdo_state != EC_REQUEST_SUCCESS) {
-    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "slave %d:%d: Failed to execute SDO request (0x%04x:0x%02x)\n", master->index, slave->index, index, subindex);
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "slave %s.%s: Failed to execute SDO request (0x%04x:0x%02x)\n", master->name, slave->name, index, subindex);
     return NULL;
   }
 

@@ -88,7 +88,7 @@ typedef struct emcec_master {
   struct emcec_master *prev;
   struct emcec_master *next;
   int index;
-  char *name;
+  char name[EMCEC_CONF_STR_MAXLEN];
   ec_master_t *master;
   SEM semaphore;
   int pdo_entry_count;
@@ -122,7 +122,7 @@ typedef struct emcec_slave {
   struct emcec_slave *next;
   struct emcec_master *master;
   int index;
-  char *name;
+  char name[EMCEC_CONF_STR_MAXLEN];
   uint32_t vid;
   uint32_t pid;
   int pdo_entry_count;
