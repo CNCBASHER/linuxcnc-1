@@ -129,9 +129,6 @@ int emcec_stmds5k_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_
     hal_data->speed_max_rpm_sp_rcpt = 0.0;
   }
 
-  // set assign_activate
-  slave->assign_activate = 0x0300;
-
   // initialize POD entries
   // E200 : device state byte
   EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x28c8, 0x00, &hal_data->dev_state_pdo_os, NULL);

@@ -89,7 +89,7 @@ typedef struct {
 typedef struct {
   EMCEC_CONF_TYPE_T confType;
   int index;
-  uint64_t appTimePeriod;
+  uint32_t appTimePeriod;
   int refClockSyncCycles;
   char name[EMCEC_CONF_STR_MAXLEN];
 } EMCEC_CONF_MASTER_T;
@@ -103,6 +103,7 @@ typedef struct {
 
 typedef struct {
   EMCEC_CONF_TYPE_T confType;
+  uint16_t assignActivate;
   uint32_t sync0Cycle;
   uint32_t sync0Shift;
   uint32_t sync1Cycle;

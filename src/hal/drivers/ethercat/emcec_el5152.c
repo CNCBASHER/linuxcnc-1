@@ -181,9 +181,6 @@ int emcec_el5152_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
   // initialize global data
   hal_data->last_operational = 0;
 
-  // set assign_activate
-  slave->assign_activate = 0x0720;
-
   // initialize pins
   for (i=0; i<EMCEC_EL5152_CHANS; i++) {
     chan = &hal_data->chans[i];

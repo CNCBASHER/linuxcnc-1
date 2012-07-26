@@ -191,7 +191,7 @@ int rtapi_app_main(void) {
 
       // configure dc for this slave
       if (slave->dc_conf != NULL) {
-        ecrt_slave_config_dc(slave->config, slave->assign_activate,
+        ecrt_slave_config_dc(slave->config, slave->dc_conf->assignActivate,
           slave->dc_conf->sync0Cycle, slave->dc_conf->sync0Shift,
           slave->dc_conf->sync1Cycle, slave->dc_conf->sync1Shift);
       }
@@ -437,6 +437,12 @@ int emcec_parse_config(void) {
           goto fail2;
         }
 
+        // check for double dc config
+        if (slave->dc_conf != NULL) {
+          rtapi_print_msg(RTAPI_MSG_WARN, EMCEC_MSG_PFX "Double dc config for slave %s.%s\n", master->name, slave->name);
+          continue;
+        }
+
         // create new dc config
         dc = kzalloc(sizeof(emcec_slave_dc_t), GFP_KERNEL);
         if (dc == NULL) {
@@ -445,6 +451,7 @@ int emcec_parse_config(void) {
         }      
 
         // initialize dc conf
+        dc->assignActivate = dc_conf->assignActivate;
         dc->sync0Cycle = dc_conf->sync0Cycle;
         dc->sync0Shift = dc_conf->sync0Shift;
         dc->sync1Cycle = dc_conf->sync1Cycle;
@@ -465,7 +472,13 @@ int emcec_parse_config(void) {
           goto fail2;
         }
 
-        // create new dc config
+        // check for double wd config
+        if (slave->wd_conf != NULL) {
+          rtapi_print_msg(RTAPI_MSG_WARN, EMCEC_MSG_PFX "Double watchdog config for slave %s.%s\n", master->name, slave->name);
+          continue;
+        }
+
+        // create new wd config
         wd = kzalloc(sizeof(emcec_slave_watchdog_t), GFP_KERNEL);
         if (wd == NULL) {
           rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unable to allocate slave %s.%s watchdog config memory\n", master->name, slave->name);

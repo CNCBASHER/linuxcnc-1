@@ -100,12 +100,13 @@ typedef struct emcec_master {
   struct emcec_slave *last_slave;
   emcec_master_data_t *hal_data;
   uint64_t app_time;
-  uint64_t app_time_period;
+  uint32_t app_time_period;
   int sync_ref_cnt;
   int sync_ref_cycles;
 } emcec_master_t;
 
 typedef struct {
+  uint16_t assignActivate;
   uint32_t sync0Cycle;
   uint32_t sync0Shift;
   uint32_t sync1Cycle;
@@ -136,7 +137,6 @@ typedef struct emcec_slave {
   emcec_slave_rw_t proc_read;
   emcec_slave_rw_t proc_write;
   emcec_slave_state_t *hal_state_data;
-  uint16_t assign_activate;
   void *hal_data;
 } emcec_slave_t;
 

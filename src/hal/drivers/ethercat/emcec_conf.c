@@ -116,6 +116,9 @@ void *outputBuffer;
 size_t outputBufferLen;
 size_t outputBufferPos;
 
+EMCEC_CONF_MASTER_T *currMaster;
+EMCEC_CONF_SLAVE_T *currSlave;
+
 int shmem_id;
 
 void xml_start_handler(void *data, const char *el, const char **attr);
@@ -128,9 +131,13 @@ void parseSlaveAttrs(const char **attr);
 void parseDcConfAttrs(const char **attr);
 void parseWatchdogAttrs(const char **attr);
 
+int parseSyncCycle(const char *nptr);
+
 static void exitHandler(int sig) {
   uint64_t u = 1;
-  write(exitEvent, &u, sizeof(uint64_t));
+  if (write(exitEvent, &u, sizeof(uint64_t)) < 0) {
+    fprintf(stderr, "%s: ERROR: error writing exit event\n", modname);
+  }
 }
 
 int main(int argc, char **argv) {
@@ -207,6 +214,8 @@ int main(int argc, char **argv) {
   outputBuffer = NULL;
   outputBufferLen = 0;
   outputBufferPos = 0;
+  currMaster = NULL;
+  currSlave = NULL;
   for (done=0; !done;) {
     // read block
     int len = fread(buffer, 1, BUFFSIZE, file);
@@ -263,7 +272,9 @@ int main(int argc, char **argv) {
   hal_ready(hal_comp_id);
 
   // wait for SIGTERM
-  read(exitEvent, &u, sizeof(uint64_t));
+  if (read(exitEvent, &u, sizeof(uint64_t)) < 0) {
+    fprintf(stderr, "%s: ERROR: error reading exit event\n", modname);
+  }
 
 fail5:
   rtapi_shmem_delete(shmem_id, hal_comp_id);
@@ -382,7 +393,7 @@ void parseMasterAttrs(const char **attr) {
 
     // parse appTimePeriod
     if (strcmp(name, "appTimePeriod") == 0) {
-      p->appTimePeriod = atoll(val);
+      p->appTimePeriod = atol(val);
       continue;
     }
 
@@ -404,6 +415,7 @@ void parseMasterAttrs(const char **attr) {
   }
 
   (*(conf_hal_data->master_count))++;
+  currMaster = p;
 }
 
 void parseSlaveAttrs(const char **attr) {
@@ -467,6 +479,7 @@ void parseSlaveAttrs(const char **attr) {
   }
 
   (*(conf_hal_data->slave_count))++;
+  currSlave = p;
 }
 
 void parseDcConfAttrs(const char **attr) {
@@ -480,9 +493,15 @@ void parseDcConfAttrs(const char **attr) {
     const char *name = *(attr++);
     const char *val = *(attr++);
 
+    // parse assignActivate (hex value)
+    if (strcmp(name, "assignActivate") == 0) {
+      p->assignActivate = strtol(val, NULL, 16);
+      continue;
+    }
+
     // parse sync0Cycle
     if (strcmp(name, "sync0Cycle") == 0) {
-      p->sync0Cycle = atoi(val);
+      p->sync0Cycle = parseSyncCycle(val);
       continue;
     }
 
@@ -494,7 +513,7 @@ void parseDcConfAttrs(const char **attr) {
 
     // parse sync1Cycle
     if (strcmp(name, "sync1Cycle") == 0) {
-      p->sync1Cycle = atoi(val);
+      p->sync1Cycle = parseSyncCycle(val);
       continue;
     }
 
@@ -541,4 +560,14 @@ void parseWatchdogAttrs(const char **attr) {
   }
 }
 
+int parseSyncCycle(const char *nptr) {
+  // chack for master period multiples
+  if (*nptr == '*') {
+    nptr++;
+    return atoi(nptr) * currMaster->appTimePeriod;
+  }
+
+  // custom value
+  return atoi(nptr);
+}
 
