@@ -86,7 +86,6 @@ typedef struct {
 
   ec_sdo_request_t *sdo_speed_max_rpm;
   ec_sdo_request_t *sdo_speed_max_rpm_sp;
-  ec_sdo_request_t *sdo_req_max_freq;
 
 } emcec_stmds5k_data_t;
 
