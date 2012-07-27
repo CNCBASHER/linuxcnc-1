@@ -140,7 +140,7 @@ int emcec_el2521_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
     return -EIO;
   }
   hal_data->sdo_ramp_fall = EC_READ_U16(ecrt_sdo_request_data(hal_data->sdo_req_ramp_fall));
-  if ((hal_data->sdo_req_ramp_factor = emcec_read_sdo(slave, 0x8001, 0x06, 2)) == NULL) {
+  if ((hal_data->sdo_req_ramp_factor = emcec_read_sdo(slave, 0x8000, 0x07, 2)) == NULL) {
     return -EIO;
   }
   hal_data->sdo_ramp_factor = EC_READ_U16(ecrt_sdo_request_data(hal_data->sdo_req_ramp_factor));

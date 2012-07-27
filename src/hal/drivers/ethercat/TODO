@@ -1,0 +1,7 @@
+- (Re-)testing/Documentation of all devices
+- add support for EL5151
+- debug hang if no slave connected
+- option --enable-ethercat for configure script
+- DOC: don't use EL9010
+- Debug EL5151/EL5152/EL2521 Subindex does not exist
+
