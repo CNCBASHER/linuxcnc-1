@@ -766,26 +766,31 @@ void emcec_write_master(void *arg, long period) {
     }
   }
 
-  // send process data
   rt_sem_wait(&master->semaphore);
 
-  // update application time
-  master->app_time += master->app_time_period;
-  ecrt_master_application_time(master->master, master->app_time);
+  // DC stuff
+  if (master->app_time_period > 0) {
+    // update application time
+    master->app_time += master->app_time_period;
+    ecrt_master_application_time(master->master, master->app_time);
 
-  // sync ref clock to master            
-  if (master->sync_ref_cnt == 0) {
-    master->sync_ref_cnt = master->sync_ref_cycles;
-    ecrt_master_sync_reference_clock(master->master);
+    // sync ref clock to master
+    if (master->sync_ref_cycles > 0) {
+      if (master->sync_ref_cnt == 0) {
+        master->sync_ref_cnt = master->sync_ref_cycles;
+        ecrt_master_sync_reference_clock(master->master);
+      }
+      master->sync_ref_cnt--;
+    }
+
+    // sync slaves to ref clock
+    ecrt_master_sync_slave_clocks(master->master);
   }
-  master->sync_ref_cnt--;
-
-  // sync slaves to ref clock
-  ecrt_master_sync_slave_clocks(master->master);
 
   // send domain data
   ecrt_domain_queue(master->domain);
   ecrt_master_send(master->master);
+
   rt_sem_signal(&master->semaphore);
 }
 
