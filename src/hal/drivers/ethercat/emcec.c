@@ -1,5 +1,5 @@
 //
-//    Copyright (C) 2011 Sascha Ittner <sascha.ittner@modusoft.de>
+//    Copyright (C) 2012 Sascha Ittner <sascha.ittner@modusoft.de>
 //
 //    This program is free software; you can redistribute it and/or modify
 //    it under the terms of the GNU General Public License as published by
@@ -17,7 +17,6 @@
 //
 
 
-
 #include "rtapi.h"
 #include "rtapi_ctype.h"
 #include "rtapi_app.h"
@@ -31,8 +30,10 @@
 #include "emcec_el2xxx.h"
 #include "emcec_el31x2.h"
 #include "emcec_el41x2.h"
+#include "emcec_el5151.h"
 #include "emcec_el5152.h"
 #include "emcec_el2521.h"
+#include "emcec_el7342.h"
 #include "emcec_stmds5k.h"
 
 MODULE_LICENSE("GPL");
@@ -100,10 +101,14 @@ static const emcec_typelist_t types[] = {
   { emcecSlaveTypeEL4132, EMCEC_EL41x2_VID, EMCEC_EL4132_PID, EMCEC_EL41x2_PDOS, emcec_el41x2_init},
 
   // encoder inputs
+  { emcecSlaveTypeEL5151, EMCEC_EL5151_VID, EMCEC_EL5151_PID, EMCEC_EL5151_PDOS, emcec_el5151_init},
   { emcecSlaveTypeEL5152, EMCEC_EL5152_VID, EMCEC_EL5152_PID, EMCEC_EL5152_PDOS, emcec_el5152_init},
 
   // pulse train (stepper) output
   { emcecSlaveTypeEL2521, EMCEC_EL2521_VID, EMCEC_EL2521_PID, EMCEC_EL2521_PDOS, emcec_el2521_init},
+
+  // dc servo
+  { emcecSlaveTypeEL7342, EMCEC_EL7342_VID, EMCEC_EL7342_PID, EMCEC_EL7342_PDOS, emcec_el7342_init},
 
   // stoeber MDS5000 series
   { emcecSlaveTypeStMDS5k, EMCEC_STMDS5K_VID, EMCEC_STMDS5K_PID, EMCEC_STMDS5K_PDOS, emcec_stmds5k_init},
@@ -194,6 +199,10 @@ int rtapi_app_main(void) {
       // configure dc for this slave
       if (slave->dc_conf != NULL) {
         ecrt_slave_config_dc(slave->config, slave->dc_conf->assignActivate,
+          slave->dc_conf->sync0Cycle, slave->dc_conf->sync0Shift,
+          slave->dc_conf->sync1Cycle, slave->dc_conf->sync1Shift);
+        rtapi_print_msg (RTAPI_MSG_DBG, EMCEC_MSG_PFX "configuring DC for slave %s.%s: assignActivate=x%x sync0Cycle=%d sync0Shift=%d sync1Cycle=%d sync1Shift=%d\n",
+          master->name, slave->name, slave->dc_conf->assignActivate,
           slave->dc_conf->sync0Cycle, slave->dc_conf->sync0Shift,
           slave->dc_conf->sync1Cycle, slave->dc_conf->sync1Shift);
       }
@@ -388,11 +397,7 @@ int emcec_parse_config(void) {
         }
 
         // check for valid slave type
-        for (type = types; type->type != emcecSlaveTypeInvalid; type++) {
-          if (type->type == slave_conf->type) {
-            break;
-          }
-        }
+        for (type = types; type->type != slave_conf->type && type->type != emcecSlaveTypeInvalid; type++);
         if (type->type == emcecSlaveTypeInvalid) {
           rtapi_print_msg(RTAPI_MSG_WARN, EMCEC_MSG_PFX "Invalid slave type %d\n", slave_conf->type);
           continue;
@@ -431,7 +436,6 @@ int emcec_parse_config(void) {
         // get config token
         dc_conf = (EMCEC_CONF_DC_T *)conf;
         conf += sizeof(EMCEC_CONF_DC_T);
-        break;
 
         // check for slave
         if (slave == NULL) {
@@ -461,12 +465,12 @@ int emcec_parse_config(void) {
 
         // add to slave
         slave->dc_conf = dc;
+        break;
 
       case emcecConfTypeWatchdog:
         // get config token
         wd_conf = (EMCEC_CONF_WATCHDOG_T *)conf;
         conf += sizeof(EMCEC_CONF_WATCHDOG_T);
-        break;
 
         // check for slave
         if (slave == NULL) {
@@ -493,6 +497,7 @@ int emcec_parse_config(void) {
 
         // add to slave
         slave->wd_conf = wd;
+        break;
 
       default:
         rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unknown config item type\n");
@@ -766,31 +771,26 @@ void emcec_write_master(void *arg, long period) {
     }
   }
 
+  // send process data
   rt_sem_wait(&master->semaphore);
 
-  // DC stuff
-  if (master->app_time_period > 0) {
-    // update application time
-    master->app_time += master->app_time_period;
-    ecrt_master_application_time(master->master, master->app_time);
+  // update application time
+  master->app_time += master->app_time_period;
+  ecrt_master_application_time(master->master, master->app_time);
 
-    // sync ref clock to master
-    if (master->sync_ref_cycles > 0) {
-      if (master->sync_ref_cnt == 0) {
-        master->sync_ref_cnt = master->sync_ref_cycles;
-        ecrt_master_sync_reference_clock(master->master);
-      }
-      master->sync_ref_cnt--;
-    }
-
-    // sync slaves to ref clock
-    ecrt_master_sync_slave_clocks(master->master);
+  // sync ref clock to master            
+  if (master->sync_ref_cnt == 0) {
+    master->sync_ref_cnt = master->sync_ref_cycles;
+    ecrt_master_sync_reference_clock(master->master);
   }
+  master->sync_ref_cnt--;
+
+  // sync slaves to ref clock
+  ecrt_master_sync_slave_clocks(master->master);
 
   // send domain data
   ecrt_domain_queue(master->domain);
   ecrt_master_send(master->master);
-
   rt_sem_signal(&master->semaphore);
 }
 
@@ -798,6 +798,7 @@ ec_sdo_request_t *emcec_read_sdo(struct emcec_slave *slave, uint16_t index, uint
   emcec_master_t *master = slave->master;
   ec_sdo_request_t *sdo;
   ec_request_state_t sdo_state;
+  unsigned long jiffies_timeout;
 
   // create request
   if (!(sdo = ecrt_slave_config_create_sdo_request(slave->config, index, subindex, size))) {
@@ -811,9 +812,10 @@ ec_sdo_request_t *emcec_read_sdo(struct emcec_slave *slave, uint16_t index, uint
   // send request
   ecrt_sdo_request_read(sdo);
 
-  // wait for completition
-  while ((sdo_state = ecrt_sdo_request_state(sdo)) == EC_REQUEST_BUSY) {
-    schedule();
+  // wait for completition (master's time out does not work here. why???)
+  jiffies_timeout = jiffies + HZ * EMCEC_SDO_REQ_TIMEOUT / 1000;
+  while (jiffies < jiffies_timeout && (sdo_state = ecrt_sdo_request_state(sdo)) == EC_REQUEST_BUSY) {
+    msleep(1);
   }
 
   // check state

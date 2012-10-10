@@ -1,5 +1,5 @@
 //
-//  Copyright (C) 2011 Sascha Ittner <sascha.ittner@modusoft.de>
+//  Copyright (C) 2012 Sascha Ittner <sascha.ittner@modusoft.de>
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -93,10 +93,14 @@ static const EMCEC_CONF_TYPELIST_T slaveTypes[] = {
   { "EL4132", emcecSlaveTypeEL4132 },
 
   // encoder inputs
+  { "EL5151", emcecSlaveTypeEL5151 },
   { "EL5152", emcecSlaveTypeEL5152 },
 
   // pulse train (stepper) output
   { "EL2521", emcecSlaveTypeEL2521 },
+
+  // dc servo
+  { "EL7342", emcecSlaveTypeEL7342 },
 
   // stoeber MDS5000 series
   { "StMDS5k", emcecSlaveTypeStMDS5k },

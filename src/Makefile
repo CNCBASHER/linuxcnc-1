@@ -768,11 +768,13 @@ obj-$(CONFIG_EMCEC) += emcec.o
 emcec-objs :=                             \
     hal/drivers/ethercat/emcec.o          \
     hal/drivers/ethercat/emcec_el1xxx.o   \
+    hal/drivers/ethercat/emcec_el2521.o   \
     hal/drivers/ethercat/emcec_el2xxx.o   \
     hal/drivers/ethercat/emcec_el31x2.o   \
     hal/drivers/ethercat/emcec_el41x2.o   \
+    hal/drivers/ethercat/emcec_el5151.o   \
     hal/drivers/ethercat/emcec_el5152.o   \
-    hal/drivers/ethercat/emcec_el2521.o   \
+    hal/drivers/ethercat/emcec_el7342.o   \
     hal/drivers/ethercat/emcec_stmds5k.o  \
     $(MATHSTUB)
 

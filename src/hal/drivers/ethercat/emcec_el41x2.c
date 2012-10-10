@@ -162,6 +162,7 @@ int emcec_el41x2_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
 
     // init other fields
     chan->old_scale = *(chan->scale) + 1.0;
+    chan->scale_recip = 1.0;
   }
 
   return 0;
@@ -173,8 +174,7 @@ void emcec_el41x2_write(struct emcec_slave *slave, long period) {
   uint8_t *pd = master->process_data;
   int i;
   emcec_el41x2_chan_t *chan;
-  double tmpval, tmpdc;
-  int32_t raw_val;
+  double tmpval, tmpdc, raw_val;
 
   // check inputs
   for (i=0; i<EMCEC_EL41x2_CHANS; i++) {
@@ -231,11 +231,11 @@ void emcec_el41x2_write(struct emcec_slave *slave, long period) {
       *(chan->curr_dc) = 0;
     } else {
       raw_val = (double)0x7fff * tmpdc;
-      if (raw_val > 0x7fff) {
-        raw_val = 0x7fff;
+      if (raw_val > (double)0x7fff) {
+        raw_val = (double)0x7fff;
       }
-      if (raw_val < -0x7fff) {
-        raw_val = -0x7fff;
+      if (raw_val < (double)-0x7fff) {
+        raw_val = (double)-0x7fff;
       }
       *(chan->pos) = (*(chan->value) > 0);
       *(chan->neg) = (*(chan->value) < 0);
@@ -243,8 +243,8 @@ void emcec_el41x2_write(struct emcec_slave *slave, long period) {
     }
 
     // update value
-    EC_WRITE_S16(&pd[chan->val_pdo_os], raw_val);
-    *(chan->raw_val) = raw_val;
+    EC_WRITE_S16(&pd[chan->val_pdo_os], (int16_t)raw_val);
+    *(chan->raw_val) = (int32_t)raw_val;
   }
 }
 

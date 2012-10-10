@@ -61,12 +61,12 @@ typedef struct {
   int period_pdo_os;
 
   int do_init;
-  int32_t index_count;
+  int32_t last_count;
   int last_index;
   int last_index_ena;
-  uint32_t virt_index_int;
+  uint32_t virt_idx_int;
   uint32_t virt_idx_mod_old;
-  int32_t virt_index_zero;
+  int32_t virt_idx_zero;
   double old_scale;
   double scale;
 } emcec_el5152_chan_t;
@@ -286,14 +286,14 @@ int emcec_el5152_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
 
     // initialize variables
     chan->do_init = 1;
-    chan->index_count = 0;
+    chan->last_count = 0;
     chan->last_index = 0;
     chan->last_index_ena = 0;
     chan->old_scale = *(chan->pos_scale) + 1.0;
     chan->scale = 1.0;
-    chan->virt_index_int = 0;
+    chan->virt_idx_int = 0;
     chan->virt_idx_mod_old = 0;
-    chan->virt_index_zero = 0;
+    chan->virt_idx_zero = 0;
   }
 
   return 0;
@@ -305,7 +305,7 @@ void emcec_el5152_read(struct emcec_slave *slave, long period) {
   uint8_t *pd = master->process_data;
   int i, idx_flag;
   emcec_el5152_chan_t *chan;
-  int32_t idx_count, raw_count, raw_period;
+  int32_t idx_count, raw_count, raw_period, raw_delta;
   uint32_t idx_tmp;
 
   // wait for slave to be operational
@@ -334,7 +334,7 @@ void emcec_el5152_read(struct emcec_slave *slave, long period) {
     // check for change in virtual index modulo
     if (chan->virt_idx_modulo != chan->virt_idx_mod_old) {
       idx_tmp = (1 << 31) / chan->virt_idx_modulo;
-      chan->virt_index_zero = idx_tmp * chan->virt_idx_modulo;
+      chan->virt_idx_zero = idx_tmp * chan->virt_idx_modulo;
       chan->virt_idx_mod_old = chan->virt_idx_modulo;
     }
 
@@ -350,12 +350,12 @@ void emcec_el5152_read(struct emcec_slave *slave, long period) {
 
     // check for operational change of slave
     if (!hal_data->last_operational) {
-      chan->index_count += raw_count - *(chan->raw_count);
+      chan->last_count = raw_count;
     }
 
     // check for counter set done
     if (EC_READ_BIT(&pd[chan->set_count_done_pdo_os], chan->set_count_done_pdo_bp)) {
-      chan->index_count += raw_count - *(chan->raw_count);
+      chan->last_count = raw_count;
       *(chan->set_raw_count) = 0;
     }
 
@@ -370,16 +370,16 @@ void emcec_el5152_read(struct emcec_slave *slave, long period) {
     idx_count = 0;
     if (chan->virt_idx_modulo != 0) {
       if (*(chan->index_ena)) {
-        idx_tmp = (uint32_t)(raw_count + chan->virt_index_zero) / chan->virt_idx_modulo;
+        idx_tmp = (uint32_t)(raw_count + chan->virt_idx_zero) / chan->virt_idx_modulo;
         if (chan->do_init || !chan->last_index_ena) {
-          chan->virt_index_int = idx_tmp;
-        } else if (idx_tmp  > chan->virt_index_int) {
+          chan->virt_idx_int = idx_tmp;
+        } else if (idx_tmp  > chan->virt_idx_int) {
           idx_flag = 1;
-        } else if (idx_tmp  < chan->virt_index_int) {
-          idx_tmp = chan->virt_index_int;
+        } else if (idx_tmp  < chan->virt_idx_int) {
+          idx_tmp = chan->virt_idx_int;
           idx_flag = 1;
         }
-        idx_count = (int32_t)(idx_tmp * chan->virt_idx_modulo) - chan->virt_index_zero;
+        idx_count = (int32_t)(idx_tmp * chan->virt_idx_modulo) - chan->virt_idx_zero;
       }
     } else {
       if (*(chan->index) && !chan->last_index) {
@@ -393,18 +393,21 @@ void emcec_el5152_read(struct emcec_slave *slave, long period) {
     // handle initialization
     if (chan->do_init || *(chan->reset)) {
       chan->do_init = 0;
-      chan->index_count = raw_count;
+      chan->last_count = raw_count;
+      *(chan->count) = 0;
       idx_flag = 0;
     }
 
     // handle index
     if (idx_flag && *(chan->index_ena)) {
-      chan->index_count = idx_count;
+      chan->last_count = idx_count;
       *(chan->index_ena) = 0;
     }
     
     // compute net counts
-    *(chan->count) = raw_count - chan->index_count;
+    raw_delta = raw_count - chan->last_count;
+    chan->last_count = raw_count;
+    *(chan->count) += raw_delta;
 
     // scale count to make floating point position
     *(chan->pos) = *(chan->count) * chan->scale;

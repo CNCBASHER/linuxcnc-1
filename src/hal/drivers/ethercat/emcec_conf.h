@@ -76,8 +76,10 @@ typedef enum {
   emcecSlaveTypeEL4112,
   emcecSlaveTypeEL4122,
   emcecSlaveTypeEL4132,
+  emcecSlaveTypeEL5151,
   emcecSlaveTypeEL5152,
   emcecSlaveTypeEL2521,
+  emcecSlaveTypeEL7342,
   emcecSlaveTypeStMDS5k
 } EMCEC_SLAVE_TYPE_T;
 

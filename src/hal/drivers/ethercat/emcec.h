@@ -57,7 +57,7 @@ do {                        \
 #define EMCEC_STOEBER_VID  0x000000b9
 
 // SDO request timeout (ms)
-#define EMCEC_SDO_REQ_TIMEOUT 500
+#define EMCEC_SDO_REQ_TIMEOUT 1000
 
 struct emcec_master;
 struct emcec_slave;

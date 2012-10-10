@@ -396,7 +396,7 @@ void emcec_stmds5k_write(struct emcec_slave *slave, long period) {
   emcec_stmds5k_data_t *hal_data = (emcec_stmds5k_data_t *) slave->hal_data;
   uint8_t *pd = master->process_data;
   uint8_t dev_ctrl;
-  int32_t speed_raw, torque_raw;
+  double speed_raw, torque_raw;
 
   // check for change in scale value
   emcec_stmds5k_check_scales(hal_data);
@@ -427,14 +427,14 @@ void emcec_stmds5k_write(struct emcec_slave *slave, long period) {
   if (*(hal_data->torque_lim) < -2.0) {
     *(hal_data->torque_lim) = -2.0;
   }
-  torque_raw = (int32_t)(*(hal_data->torque_lim) * STMDS5K_PCT_REG_FACTOR);
-  if (torque_raw > 0x7fff) {
-    torque_raw = 0x7fff;
+  torque_raw = *(hal_data->torque_lim) * STMDS5K_PCT_REG_FACTOR;
+  if (torque_raw > (double)0x7fff) {
+    torque_raw = (double)0x7fff;
   }
-  if (torque_raw < -0x7fff) {
-    torque_raw = -0x7fff;
+  if (torque_raw < (double)-0x7fff) {
+    torque_raw = (double)-0x7fff;
   }
-  EC_WRITE_S16(&pd[hal_data->torque_max_pdo_os], torque_raw);
+  EC_WRITE_S16(&pd[hal_data->torque_max_pdo_os], (int16_t)torque_raw);
 
   // calculate rpm command
   *(hal_data->vel_rpm) = *(hal_data->vel_cmd) * hal_data->pos_scale * STMDS5K_RPM_FACTOR;
@@ -446,16 +446,16 @@ void emcec_stmds5k_write(struct emcec_slave *slave, long period) {
   if (*(hal_data->vel_rpm) < -hal_data->speed_max_rpm) {
     *(hal_data->vel_rpm) = -hal_data->speed_max_rpm;
   }
-  speed_raw = (int32_t)(*(hal_data->vel_rpm) * hal_data->speed_max_rpm_sp_rcpt * STMDS5K_PCT_REG_FACTOR);
-  if (speed_raw > 0x7fff) {
-    speed_raw = 0x7fff;
+  speed_raw = *(hal_data->vel_rpm) * hal_data->speed_max_rpm_sp_rcpt * STMDS5K_PCT_REG_FACTOR;
+  if (speed_raw > (double)0x7fff) {
+    speed_raw = (double)0x7fff;
   }
-  if (speed_raw < -0x7fff) {
-    speed_raw = -0x7fff;
+  if (speed_raw < (double)-0x7fff) {
+    speed_raw = (double)-0x7fff;
   }
   if (! *(hal_data->enable)) {
-    speed_raw = 0;
+    speed_raw = 0.0;
   }
-  EC_WRITE_S16(&pd[hal_data->speed_sp_rel_pdo_os], speed_raw);
+  EC_WRITE_S16(&pd[hal_data->speed_sp_rel_pdo_os], (int16_t)speed_raw);
 }
 
