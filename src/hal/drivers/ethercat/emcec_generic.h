@@ -15,19 +15,28 @@
 //    along with this program; if not, write to the Free Software
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 //
-#ifndef _EMCEC_EL7342_H_
-#define _EMCEC_EL7342_H_
+#ifndef _EMCEC_GENERIC_H_
+#define _EMCEC_GENERIC_H_
 
 #include <linux/ctype.h>
 #include "emcec.h"
+#include "emcec_conf.h"
 
-#define EMCEC_EL7342_VID EMCEC_BECKHOFF_VID
-#define EMCEC_EL7342_PID 0x1cae3052
+#define EMCEC_GENERIC_MAX_SUBPINS 32
 
-#define EMCEC_EL7342_CHANS 2
-#define EMCEC_EL7342_PDOS  (33 * EMCEC_EL7342_CHANS)
+typedef struct {
+  char name[EMCEC_CONF_STR_MAXLEN];
+  hal_type_t type;
+  hal_pin_dir_t dir;
+  void *pin[EMCEC_GENERIC_MAX_SUBPINS];
+  uint16_t pdo_idx;
+  uint8_t pdo_sidx;
+  int pdo_len;
+  int pdo_os;
+  int pdo_bp;
+} emcec_generic_pin_t;
 
-int emcec_el7342_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t *pdo_entry_regs);
+int emcec_generic_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t *pdo_entry_regs);
 
 #endif
 

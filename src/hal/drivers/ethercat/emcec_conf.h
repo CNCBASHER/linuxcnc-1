@@ -16,7 +16,10 @@
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 //
 #ifndef _EMCEC_CONF_H_
-#define _EMCEC_H_
+#define _EMCEC_CONF_H_
+
+#include "hal.h"
+#include "ecrt.h"
 
 #define EMCEC_MODULE_NAME "emcec"
 
@@ -30,11 +33,17 @@ typedef enum {
   emcecConfTypeMaster,
   emcecConfTypeSlave,
   emcecConfTypeDcConf,
-  emcecConfTypeWatchdog
+  emcecConfTypeWatchdog,
+  emcecConfTypeSyncManager,
+  emcecConfTypePdo,
+  emcecConfTypePdoEntry,
+  emcecConfTypeSdoConfig,
+  emcecConfTypeSdoDataRaw
 } EMCEC_CONF_TYPE_T;
 
 typedef enum {
   emcecSlaveTypeInvalid,
+  emcecSlaveTypeGeneric,
   emcecSlaveTypeEK1100,
   emcecSlaveTypeEL1002,
   emcecSlaveTypeEL1004,
@@ -54,6 +63,7 @@ typedef enum {
   emcecSlaveTypeEL1134,
   emcecSlaveTypeEL1144,
   emcecSlaveTypeEL1808,
+  emcecSlaveTypeEL1809,
   emcecSlaveTypeEL2002,
   emcecSlaveTypeEL2004,
   emcecSlaveTypeEL2008,
@@ -66,12 +76,17 @@ typedef enum {
   emcecSlaveTypeEL2088,
   emcecSlaveTypeEL2124,
   emcecSlaveTypeEL2808,
+  emcecSlaveTypeEL2809,
   emcecSlaveTypeEL3102,
   emcecSlaveTypeEL3112,
   emcecSlaveTypeEL3122,
   emcecSlaveTypeEL3142,
   emcecSlaveTypeEL3152,
   emcecSlaveTypeEL3162,
+  emcecSlaveTypeEL4002,
+  emcecSlaveTypeEL4012,
+  emcecSlaveTypeEL4022,
+  emcecSlaveTypeEL4032,
   emcecSlaveTypeEL4102,
   emcecSlaveTypeEL4112,
   emcecSlaveTypeEL4122,
@@ -80,6 +95,11 @@ typedef enum {
   emcecSlaveTypeEL5152,
   emcecSlaveTypeEL2521,
   emcecSlaveTypeEL7342,
+  emcecSlaveTypeEL9505,
+  emcecSlaveTypeEL9508,
+  emcecSlaveTypeEL9510,
+  emcecSlaveTypeEL9512,
+  emcecSlaveTypeEL9515,
   emcecSlaveTypeStMDS5k
 } EMCEC_SLAVE_TYPE_T;
 
@@ -100,7 +120,15 @@ typedef struct {
   EMCEC_CONF_TYPE_T confType;
   int index;
   EMCEC_SLAVE_TYPE_T type;
-  char name[EMCEC_CONF_STR_MAXLEN];
+  uint32_t vid;
+  uint32_t pid;
+  int configPdos;
+  unsigned int syncManagerCount;
+  unsigned int pdoCount;
+  unsigned int pdoEntryCount;
+  unsigned int pdoMappingCount;
+  size_t sdoConfigLength;
+  char name[EMCEC_CONF_STR_MAXLEN];    
 } EMCEC_CONF_SLAVE_T;
 
 typedef struct {
@@ -120,6 +148,38 @@ typedef struct {
 
 typedef struct {
   EMCEC_CONF_TYPE_T confType;
+  uint8_t index;
+  ec_direction_t dir;
+  unsigned int pdoCount;
+} EMCEC_CONF_SYNCMANAGER_T;
+
+typedef struct {
+  EMCEC_CONF_TYPE_T confType;
+  uint16_t index;
+  unsigned int pdoEntryCount;
+} EMCEC_CONF_PDO_T;
+
+typedef struct {
+  EMCEC_CONF_TYPE_T confType;
+  uint16_t index;
+  uint8_t subindex;
+  uint8_t bitLength;
+  hal_type_t halType;
+  char halPin[EMCEC_CONF_STR_MAXLEN];    
+} EMCEC_CONF_PDOENTRY_T;
+
+typedef struct {
+  EMCEC_CONF_TYPE_T confType;
 } EMCEC_CONF_NULL_T;
+
+#define EMCEC_CONF_SDO_COMPLETE_SUBIDX -1
+
+typedef struct {
+  EMCEC_CONF_TYPE_T confType;
+  uint16_t index;
+  int16_t subindex;
+  size_t length;
+  uint8_t data[];
+} EMCEC_CONF_SDOCONF_T;
 
 #endif

@@ -35,6 +35,7 @@
 #define EMCEC_EL2088_PID 0x08283052
 #define EMCEC_EL2124_PID 0x084C3052
 #define EMCEC_EL2808_PID 0x0AF83052
+#define EMCEC_EL2809_PID 0x0AF93052
 
 #define EMCEC_EL2002_PDOS 2
 #define EMCEC_EL2004_PDOS 4
@@ -48,6 +49,7 @@
 #define EMCEC_EL2088_PDOS 8
 #define EMCEC_EL2124_PDOS 4
 #define EMCEC_EL2808_PDOS 8
+#define EMCEC_EL2809_PDOS 16
 
 int emcec_el2xxx_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t *pdo_entry_regs);
 

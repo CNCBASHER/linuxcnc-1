@@ -25,15 +25,18 @@
 #include "hal.h"
 
 #include "emcec.h"
+#include "emcec_generic.h"
 #include "emcec_ek1100.h"
 #include "emcec_el1xxx.h"
 #include "emcec_el2xxx.h"
 #include "emcec_el31x2.h"
+#include "emcec_el40x2.h"
 #include "emcec_el41x2.h"
 #include "emcec_el5151.h"
 #include "emcec_el5152.h"
 #include "emcec_el2521.h"
 #include "emcec_el7342.h"
+#include "emcec_el95xx.h"
 #include "emcec_stmds5k.h"
 
 MODULE_LICENSE("GPL");
@@ -71,6 +74,7 @@ static const emcec_typelist_t types[] = {
   { emcecSlaveTypeEL1134, EMCEC_EL1xxx_VID, EMCEC_EL1134_PID, EMCEC_EL1134_PDOS, emcec_el1xxx_init},
   { emcecSlaveTypeEL1144, EMCEC_EL1xxx_VID, EMCEC_EL1144_PID, EMCEC_EL1144_PDOS, emcec_el1xxx_init},
   { emcecSlaveTypeEL1808, EMCEC_EL1xxx_VID, EMCEC_EL1808_PID, EMCEC_EL1808_PDOS, emcec_el1xxx_init},
+  { emcecSlaveTypeEL1809, EMCEC_EL1xxx_VID, EMCEC_EL1809_PID, EMCEC_EL1809_PDOS, emcec_el1xxx_init},
 
   // digital out
   { emcecSlaveTypeEL2002, EMCEC_EL2xxx_VID, EMCEC_EL2002_PID, EMCEC_EL2002_PDOS, emcec_el2xxx_init},
@@ -85,6 +89,7 @@ static const emcec_typelist_t types[] = {
   { emcecSlaveTypeEL2088, EMCEC_EL2xxx_VID, EMCEC_EL2088_PID, EMCEC_EL2088_PDOS, emcec_el2xxx_init},
   { emcecSlaveTypeEL2124, EMCEC_EL2xxx_VID, EMCEC_EL2124_PID, EMCEC_EL2124_PDOS, emcec_el2xxx_init},
   { emcecSlaveTypeEL2808, EMCEC_EL2xxx_VID, EMCEC_EL2808_PID, EMCEC_EL2808_PDOS, emcec_el2xxx_init},
+  { emcecSlaveTypeEL2809, EMCEC_EL2xxx_VID, EMCEC_EL2809_PID, EMCEC_EL2809_PDOS, emcec_el2xxx_init},
 
   // analog in, 2ch, 16 bits
   { emcecSlaveTypeEL3102, EMCEC_EL31x2_VID, EMCEC_EL3102_PID, EMCEC_EL31x2_PDOS, emcec_el31x2_init},
@@ -93,6 +98,12 @@ static const emcec_typelist_t types[] = {
   { emcecSlaveTypeEL3142, EMCEC_EL31x2_VID, EMCEC_EL3142_PID, EMCEC_EL31x2_PDOS, emcec_el31x2_init},
   { emcecSlaveTypeEL3152, EMCEC_EL31x2_VID, EMCEC_EL3152_PID, EMCEC_EL31x2_PDOS, emcec_el31x2_init},
   { emcecSlaveTypeEL3162, EMCEC_EL31x2_VID, EMCEC_EL3162_PID, EMCEC_EL31x2_PDOS, emcec_el31x2_init},
+
+  // analog out, 2ch, 12 bits
+  { emcecSlaveTypeEL4002, EMCEC_EL40x2_VID, EMCEC_EL4002_PID, EMCEC_EL40x2_PDOS, emcec_el40x2_init},
+  { emcecSlaveTypeEL4012, EMCEC_EL40x2_VID, EMCEC_EL4012_PID, EMCEC_EL40x2_PDOS, emcec_el40x2_init},
+  { emcecSlaveTypeEL4022, EMCEC_EL40x2_VID, EMCEC_EL4022_PID, EMCEC_EL40x2_PDOS, emcec_el40x2_init},
+  { emcecSlaveTypeEL4032, EMCEC_EL40x2_VID, EMCEC_EL4032_PID, EMCEC_EL40x2_PDOS, emcec_el40x2_init},
 
   // analog out, 2ch, 16 bits
   { emcecSlaveTypeEL4102, EMCEC_EL41x2_VID, EMCEC_EL4102_PID, EMCEC_EL41x2_PDOS, emcec_el41x2_init},
@@ -109,6 +120,13 @@ static const emcec_typelist_t types[] = {
 
   // dc servo
   { emcecSlaveTypeEL7342, EMCEC_EL7342_VID, EMCEC_EL7342_PID, EMCEC_EL7342_PDOS, emcec_el7342_init},
+
+  // power supply
+  { emcecSlaveTypeEL9505, EMCEC_EL95xx_VID, EMCEC_EL9505_PID, EMCEC_EL95xx_PDOS, emcec_el95xx_init},
+  { emcecSlaveTypeEL9508, EMCEC_EL95xx_VID, EMCEC_EL9508_PID, EMCEC_EL95xx_PDOS, emcec_el95xx_init},
+  { emcecSlaveTypeEL9510, EMCEC_EL95xx_VID, EMCEC_EL9510_PID, EMCEC_EL95xx_PDOS, emcec_el95xx_init},
+  { emcecSlaveTypeEL9512, EMCEC_EL95xx_VID, EMCEC_EL9512_PID, EMCEC_EL95xx_PDOS, emcec_el95xx_init},
+  { emcecSlaveTypeEL9515, EMCEC_EL95xx_VID, EMCEC_EL9515_PID, EMCEC_EL95xx_PDOS, emcec_el95xx_init},
 
   // stoeber MDS5000 series
   { emcecSlaveTypeStMDS5k, EMCEC_STMDS5K_VID, EMCEC_STMDS5K_PID, EMCEC_STMDS5K_PDOS, emcec_stmds5k_init},
@@ -145,6 +163,8 @@ int rtapi_app_main(void) {
   emcec_slave_t *slave;
   char name[HAL_NAME_LEN + 1];
   ec_pdo_entry_reg_t *pdo_entry_regs;
+  emcec_slave_sdoconf_t *sdo_config;
+  int i;
 
   // connect to the HAL
   if ((comp_id = hal_init (EMCEC_MODULE_NAME)) < 0) {
@@ -186,6 +206,21 @@ int rtapi_app_main(void) {
       if (!(slave->config = ecrt_master_slave_config(master->master, 0, slave->index, slave->vid, slave->pid))) {
         rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "fail to read slave %s.%s configuration\n", master->name, slave->name);
         goto fail2;
+      }
+
+      // initialize sdos
+      if (slave->sdo_config != NULL) {
+        for (sdo_config = slave->sdo_config; sdo_config->index != 0xffff; sdo_config = (emcec_slave_sdoconf_t *) &sdo_config->data[sdo_config->length]) {
+          if (sdo_config->subindex == EMCEC_CONF_SDO_COMPLETE_SUBIDX) {
+            if (ecrt_slave_config_complete_sdo(slave->config, sdo_config->index, &sdo_config->data[0], sdo_config->length) != 0) {
+              rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "fail to configure slave %s.%s sdo %04x (complete)\n", master->name, slave->name, sdo_config->index);
+            }
+          } else {
+            if (ecrt_slave_config_sdo(slave->config, sdo_config->index, sdo_config->subindex, &sdo_config->data[0], sdo_config->length) != 0) {
+              rtapi_print_msg (RTAPI_MSG_ERR, EMCEC_MSG_PFX "fail to configure slave %s.%s sdo %04x:%02x\n", master->name, slave->name, sdo_config->index, sdo_config->subindex);
+            }
+          }
+        }
       }
 
       // setup pdos
@@ -291,6 +326,13 @@ fail0:
 }
 
 void rtapi_app_exit(void) {
+  emcec_master_t *master;
+
+  // deactivate all masters
+  for (master = first_master; master != NULL; master = master->next) {
+    ecrt_master_deactivate(master->master);
+  }
+
   emcec_clear_config();
   hal_exit(comp_id);
 }
@@ -313,6 +355,16 @@ int emcec_parse_config(void) {
   EMCEC_CONF_SLAVE_T *slave_conf;
   EMCEC_CONF_DC_T *dc_conf;
   EMCEC_CONF_WATCHDOG_T *wd_conf;
+  EMCEC_CONF_SYNCMANAGER_T *sm_conf;
+  EMCEC_CONF_PDO_T *pdo_conf;
+  EMCEC_CONF_PDOENTRY_T *pe_conf;
+  EMCEC_CONF_SDOCONF_T *sdo_conf;
+  ec_pdo_entry_info_t *generic_pdo_entries;
+  ec_pdo_info_t *generic_pdos;
+  ec_sync_info_t *generic_sync_managers;
+  emcec_generic_pin_t *generic_hal_data;
+  hal_pin_dir_t generic_hal_dir;
+  emcec_slave_sdoconf_t *sdo_config;
 
   // initialize list
   first_master = NULL;
@@ -356,6 +408,12 @@ int emcec_parse_config(void) {
   slave_count = 0;
   master = NULL;
   slave = NULL;
+  generic_pdo_entries = NULL;
+  generic_pdos = NULL;
+  generic_sync_managers = NULL;
+  generic_hal_data = NULL;
+  generic_hal_dir = 0;
+  sdo_config = NULL;
   while((conf_type = ((EMCEC_CONF_NULL_T *)conf)->confType) != emcecConfTypeNone) {
     // get type
     switch (conf_type) {
@@ -397,10 +455,14 @@ int emcec_parse_config(void) {
         }
 
         // check for valid slave type
-        for (type = types; type->type != slave_conf->type && type->type != emcecSlaveTypeInvalid; type++);
-        if (type->type == emcecSlaveTypeInvalid) {
-          rtapi_print_msg(RTAPI_MSG_WARN, EMCEC_MSG_PFX "Invalid slave type %d\n", slave_conf->type);
-          continue;
+        if (slave_conf->type == emcecSlaveTypeGeneric) {
+          type = NULL;
+        } else {
+          for (type = types; type->type != slave_conf->type && type->type != emcecSlaveTypeInvalid; type++);
+          if (type->type == emcecSlaveTypeInvalid) {
+            rtapi_print_msg(RTAPI_MSG_WARN, EMCEC_MSG_PFX "Invalid slave type %d\n", slave_conf->type);
+            continue;
+          }
         }
 
         // create new slave
@@ -411,22 +473,86 @@ int emcec_parse_config(void) {
         }      
 
         // initialize slave
+        generic_pdo_entries = NULL;
+        generic_pdos = NULL;
+        generic_sync_managers = NULL;
+        generic_hal_data = NULL;
+        generic_hal_dir = 0;
+        sdo_config = NULL;
+
         slave->index = slave_conf->index;
         strncpy(slave->name, slave_conf->name, EMCEC_CONF_STR_MAXLEN);
         slave->name[EMCEC_CONF_STR_MAXLEN - 1] = 0;
         slave->master = master;
-        slave->vid = type->vid;
-        slave->pid = type->pid;
-        slave->pdo_entry_count = type->pdo_entry_count;
-        slave->proc_init = type->proc_init;
-        slave->dc_conf = NULL;
-        slave->wd_conf = NULL;
 
         // add slave to list
         EMCEC_LIST_APPEND(master->first_slave, master->last_slave, slave);
 
+        if (type != NULL) {
+          // normal slave
+          slave->vid = type->vid;
+          slave->pid = type->pid;
+          slave->pdo_entry_count = type->pdo_entry_count;
+          slave->proc_init = type->proc_init;
+        } else {
+          // generic slave
+          slave->vid = slave_conf->vid;
+          slave->pid = slave_conf->pid;
+          slave->pdo_entry_count = slave_conf->pdoMappingCount;
+          slave->proc_init = emcec_generic_init;
+
+          // alloc hal memory
+          if ((generic_hal_data = hal_malloc(sizeof(emcec_generic_pin_t) * slave_conf->pdoMappingCount)) == NULL) {
+            rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "hal_malloc() for slave %s.%s failed\n", master->name, slave_conf->name);
+            goto fail2;
+          }
+          memset(generic_hal_data, 0, sizeof(emcec_generic_pin_t) * slave_conf->pdoMappingCount);
+
+          // alloc pdo entry memory
+          generic_pdo_entries = kzalloc(sizeof(ec_pdo_entry_info_t) * slave_conf->pdoEntryCount, GFP_KERNEL);
+          if (generic_pdo_entries == NULL) {
+            rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unable to allocate slave %s.%s generic pdo entry memory\n", master->name, slave_conf->name);
+            goto fail2;
+          }
+
+          // alloc pdo memory
+          generic_pdos = kzalloc(sizeof(ec_pdo_info_t) * slave_conf->pdoCount, GFP_KERNEL);
+          if (generic_pdos == NULL) {
+            rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unable to allocate slave %s.%s generic pdo memory\n", master->name, slave_conf->name);
+            goto fail2;
+          }
+
+          // alloc sync manager memory
+          generic_sync_managers = kzalloc(sizeof(ec_sync_info_t) * (slave_conf->syncManagerCount + 1), GFP_KERNEL);      
+          if (generic_sync_managers == NULL) {
+            rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unable to allocate slave %s.%s generic sync manager memory\n", master->name, slave_conf->name);
+            goto fail2;
+          }      
+          generic_sync_managers->index = 0xff;
+        }
+
+        // alloc sdo config memory
+        if (slave_conf->sdoConfigLength > 0) {
+          sdo_config = kzalloc(slave_conf->sdoConfigLength + sizeof(emcec_slave_sdoconf_t), GFP_KERNEL);
+          if (sdo_config == NULL) {
+            rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unable to allocate slave %s.%s generic pdo entry memory\n", master->name, slave_conf->name);
+            goto fail2;
+          }
+        }
+
+        slave->hal_data = generic_hal_data;
+        slave->generic_pdo_entries = generic_pdo_entries;
+        slave->generic_pdos = generic_pdos;
+        slave->generic_sync_managers = generic_sync_managers;
+        if (slave_conf->configPdos) {
+          slave->sync_info = generic_sync_managers;
+        }
+        slave->sdo_config = sdo_config;
+        slave->dc_conf = NULL;
+        slave->wd_conf = NULL;
+
         // update master's POD entry count
-        master->pdo_entry_count += type->pdo_entry_count;
+        master->pdo_entry_count += slave->pdo_entry_count;
 
         // update slave count
         slave_count++;
@@ -499,6 +625,133 @@ int emcec_parse_config(void) {
         slave->wd_conf = wd;
         break;
 
+      case emcecConfTypeSyncManager:
+        // get config token
+        sm_conf = (EMCEC_CONF_SYNCMANAGER_T *)conf;
+        conf += sizeof(EMCEC_CONF_SYNCMANAGER_T);
+
+        // check for syncmanager
+        if (generic_sync_managers == NULL) {
+          rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Sync manager for generic device missing\n");
+          goto fail2;
+        }
+
+        // check for pdos
+        if (generic_pdos == NULL) {
+          rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "PDOs for generic device missing\n");
+          goto fail2;
+        }
+
+        // initialize sync manager
+        generic_sync_managers->index = sm_conf->index;
+        generic_sync_managers->dir = sm_conf->dir;
+        generic_sync_managers->n_pdos = sm_conf->pdoCount;
+        generic_sync_managers->pdos = sm_conf->pdoCount == 0 ? NULL : generic_pdos;
+
+        // get hal direction
+        switch (sm_conf->dir) {
+          case EC_DIR_INPUT:
+            generic_hal_dir = HAL_OUT;
+            break;
+          case EC_DIR_OUTPUT:
+            generic_hal_dir = HAL_IN;
+            break;
+          default:
+            generic_hal_dir = 0;
+        }
+
+        // next syncmanager
+        generic_sync_managers++;
+        generic_sync_managers->index = 0xff;
+        break;
+
+      case emcecConfTypePdo:
+        // get config token
+        pdo_conf = (EMCEC_CONF_PDO_T *)conf;
+        conf += sizeof(EMCEC_CONF_PDO_T);
+
+        // check for pdos
+        if (generic_pdos == NULL) {
+          rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "PDOs for generic device missing\n");
+          goto fail2;
+        }
+
+        // check for pdos entries
+        if (generic_pdo_entries == NULL) {
+          rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "PDO entries for generic device missing\n");
+          goto fail2;
+        }
+
+        // initialize pdo
+        generic_pdos->index = pdo_conf->index;
+        generic_pdos->n_entries = pdo_conf->pdoEntryCount;
+        generic_pdos->entries = pdo_conf->pdoEntryCount == 0 ? NULL : generic_pdo_entries;
+
+        // next pdo
+        generic_pdos++;
+        break;
+
+      case emcecConfTypePdoEntry:
+        // get config token
+        pe_conf = (EMCEC_CONF_PDOENTRY_T *)conf;
+        conf += sizeof(EMCEC_CONF_PDOENTRY_T);
+
+        // check for pdos entries
+        if (generic_pdo_entries == NULL) {
+          rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "PDO entries for generic device missing\n");
+          goto fail2;
+        }
+
+        // check for hal data
+        if (generic_hal_data == NULL) {
+          rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "HAL data for generic device missing\n");
+          goto fail2;
+        }
+
+        // check for hal dir
+        if (generic_hal_dir == 0) {
+          rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "HAL direction for generic device missing\n");
+          goto fail2;
+        }
+
+        // initialize pdo entry
+        generic_pdo_entries->index = pe_conf->index;
+        generic_pdo_entries->subindex = pe_conf->subindex;
+        generic_pdo_entries->bit_length = pe_conf->bitLength;
+
+        // initialize hal data
+        if (pe_conf->halPin[0] != 0) {
+          strncpy(generic_hal_data->name, pe_conf->halPin, EMCEC_CONF_STR_MAXLEN);
+          generic_hal_data->name[EMCEC_CONF_STR_MAXLEN - 1] = 0;
+          generic_hal_data->type = pe_conf->halType;
+          generic_hal_data->dir = generic_hal_dir;
+          generic_hal_data->pdo_idx = pe_conf->index;
+          generic_hal_data->pdo_sidx = pe_conf->subindex;
+          generic_hal_data->pdo_len = pe_conf->bitLength;
+          generic_hal_data++;
+        }
+
+        // next pdo entry
+        generic_pdo_entries++;
+        break;
+
+      case emcecConfTypeSdoConfig:
+        // get config token
+        sdo_conf = (EMCEC_CONF_SDOCONF_T *)conf;
+        conf += sizeof(EMCEC_CONF_SDOCONF_T) + sdo_conf->length;
+
+        // copy attributes
+        sdo_config->index = sdo_conf->index;
+        sdo_config->subindex = sdo_conf->subindex;
+        sdo_config->length = sdo_conf->length;
+
+        // copy data
+        memcpy(sdo_config->data, sdo_conf->data, sdo_config->length);
+
+        sdo_config = (emcec_slave_sdoconf_t *) &sdo_config->data[sdo_config->length];
+        sdo_config->index = 0xffff;
+        break;
+
       default:
         rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "Unknown config item type\n");
         goto fail2;
@@ -508,7 +761,7 @@ int emcec_parse_config(void) {
   // close shmem
   rtapi_shmem_delete(shmem_id, comp_id);
 
-  // allocate PDO etity memory
+  // allocate PDO entity memory
   for (master = first_master; master != NULL; master = master->next) {
     pdo_entry_regs = kzalloc(sizeof(ec_pdo_entry_reg_t) * (master->pdo_entry_count + 1), GFP_KERNEL);
     if (pdo_entry_regs == NULL) {
@@ -548,6 +801,18 @@ void emcec_clear_config(void) {
       }
 
       // free slave
+      if (slave->sdo_config != NULL) {
+        kfree(slave->sdo_config);
+      }
+      if (slave->generic_pdo_entries != NULL) {
+        kfree(slave->generic_pdo_entries);
+      }
+      if (slave->generic_pdos != NULL) {
+        kfree(slave->generic_pdos);
+      }
+      if (slave->generic_sync_managers != NULL) {
+        kfree(slave->generic_sync_managers);
+      }
       if (slave->dc_conf != NULL) {
         kfree(slave->dc_conf);
       }

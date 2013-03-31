@@ -118,6 +118,13 @@ typedef struct {
   uint16_t intervals;
 } emcec_slave_watchdog_t;
 
+typedef struct {
+  uint16_t index;
+  int16_t subindex;
+  size_t length;
+  uint8_t data[];
+} emcec_slave_sdoconf_t;
+
 typedef struct emcec_slave {
   struct emcec_slave *prev;
   struct emcec_slave *next;
@@ -138,6 +145,10 @@ typedef struct emcec_slave {
   emcec_slave_rw_t proc_write;
   emcec_slave_state_t *hal_state_data;
   void *hal_data;
+  ec_pdo_entry_info_t *generic_pdo_entries;
+  ec_pdo_info_t *generic_pdos;
+  ec_sync_info_t *generic_sync_managers;
+  emcec_slave_sdoconf_t *sdo_config;
 } emcec_slave_t;
 
 ec_sdo_request_t *emcec_read_sdo(struct emcec_slave *slave, uint16_t index, uint8_t subindex, size_t size);

@@ -44,6 +44,9 @@ static const EMCEC_CONF_TYPELIST_T slaveTypes[] = {
   // bus coupler
   { "EK1100", emcecSlaveTypeEK1100 },
 
+  // generic device
+  { "generic", emcecSlaveTypeGeneric },
+
   // digital in
   { "EL1002", emcecSlaveTypeEL1002 },
   { "EL1004", emcecSlaveTypeEL1004 },
@@ -63,6 +66,7 @@ static const EMCEC_CONF_TYPELIST_T slaveTypes[] = {
   { "EL1134", emcecSlaveTypeEL1134 },
   { "EL1144", emcecSlaveTypeEL1144 },
   { "EL1808", emcecSlaveTypeEL1808 },
+  { "EL1809", emcecSlaveTypeEL1809 },
 
   // digital out
   { "EL2002", emcecSlaveTypeEL2002 },
@@ -77,6 +81,7 @@ static const EMCEC_CONF_TYPELIST_T slaveTypes[] = {
   { "EL2088", emcecSlaveTypeEL2088 },
   { "EL2124", emcecSlaveTypeEL2124 },
   { "EL2808", emcecSlaveTypeEL2808 },
+  { "EL2809", emcecSlaveTypeEL2809 },
 
   // analog in, 2ch, 16 bits
   { "EL3102", emcecSlaveTypeEL3102 },
@@ -85,6 +90,12 @@ static const EMCEC_CONF_TYPELIST_T slaveTypes[] = {
   { "EL3142", emcecSlaveTypeEL3142 },
   { "EL3152", emcecSlaveTypeEL3152 },
   { "EL3162", emcecSlaveTypeEL3162 },
+
+  // analog out, 2ch, 12 bits
+  { "EL4002", emcecSlaveTypeEL4002 },
+  { "EL4012", emcecSlaveTypeEL4012 },
+  { "EL4022", emcecSlaveTypeEL4022 },
+  { "EL4032", emcecSlaveTypeEL4032 },
 
   // analog out, 2ch, 16 bits
   { "EL4102", emcecSlaveTypeEL4102 },
@@ -101,6 +112,13 @@ static const EMCEC_CONF_TYPELIST_T slaveTypes[] = {
 
   // dc servo
   { "EL7342", emcecSlaveTypeEL7342 },
+
+  // power suppply
+  { "EL9505", emcecSlaveTypeEL9505 },
+  { "EL9508", emcecSlaveTypeEL9508 },
+  { "EL9510", emcecSlaveTypeEL9510 },
+  { "EL9512", emcecSlaveTypeEL9512 },
+  { "EL9515", emcecSlaveTypeEL9515 },
 
   // stoeber MDS5000 series
   { "StMDS5k", emcecSlaveTypeStMDS5k },
@@ -122,6 +140,9 @@ size_t outputBufferPos;
 
 EMCEC_CONF_MASTER_T *currMaster;
 EMCEC_CONF_SLAVE_T *currSlave;
+EMCEC_CONF_SYNCMANAGER_T *currSyncManager;
+EMCEC_CONF_PDO_T *currPdo;
+EMCEC_CONF_SDOCONF_T *currSdoConf;
 
 int shmem_id;
 
@@ -130,10 +151,17 @@ void xml_end_handler(void *data, const char *el);
 
 void *getOutputBuffer(size_t len);
 
+int parseHexdump(const char *str, uint8_t *buf);
+
 void parseMasterAttrs(const char **attr);
 void parseSlaveAttrs(const char **attr);
 void parseDcConfAttrs(const char **attr);
 void parseWatchdogAttrs(const char **attr);
+void parseSdoConfigAttrs(const char **attr);
+void parseSdoDataRawAttrs(const char **attr);
+void parseSyncManagerAttrs(const char **attr);
+void parsePdoAttrs(const char **attr);
+void parsePdoEntryAttrs(const char **attr);
 
 int parseSyncCycle(const char *nptr);
 
@@ -220,6 +248,9 @@ int main(int argc, char **argv) {
   outputBufferPos = 0;
   currMaster = NULL;
   currSlave = NULL;
+  currSyncManager = NULL;
+  currPdo = NULL;
+  currSdoConf = NULL;
   for (done=0; !done;) {
     // read block
     int len = fread(buffer, 1, BUFFSIZE, file);
@@ -324,6 +355,37 @@ void xml_start_handler(void *data, const char *el, const char **attr) {
         parseWatchdogAttrs(attr);
         return;
       }
+      if (strcmp(el, "sdoConfig") == 0) {
+        currConfType = emcecConfTypeSdoConfig;
+        parseSdoConfigAttrs(attr);
+        return;
+      }
+      if (currSlave->type == emcecSlaveTypeGeneric && strcmp(el, "syncManager") == 0) {
+        currConfType = emcecConfTypeSyncManager;
+        parseSyncManagerAttrs(attr);
+        return;
+      }
+      break;
+    case emcecConfTypeSdoConfig:
+      if (strcmp(el, "sdoDataRaw") == 0) {
+        currConfType = emcecConfTypeSdoDataRaw;
+        parseSdoDataRawAttrs(attr);
+        return;
+      }
+      break;
+    case emcecConfTypeSyncManager:
+      if (strcmp(el, "pdo") == 0) {
+        currConfType = emcecConfTypePdo;
+        parsePdoAttrs(attr);
+        return;
+      }
+      break;
+    case emcecConfTypePdo:
+      if (strcmp(el, "pdoEntry") == 0) {
+        currConfType = emcecConfTypePdoEntry;
+        parsePdoEntryAttrs(attr);
+        return;
+      }
       break;
   }
 
@@ -334,19 +396,63 @@ void xml_start_handler(void *data, const char *el, const char **attr) {
 void xml_end_handler(void *data, const char *el) {
   switch (currConfType) {
     case emcecConfTypeMaster:
-      currConfType = emcecConfTypeNone;
+      if (strcmp(el, "master") == 0) {
+        currConfType = emcecConfTypeNone;
+        return;
+      }
       break;
     case emcecConfTypeSlave:
-      currConfType = emcecConfTypeMaster;
+      if (strcmp(el, "slave") == 0) {
+        currConfType = emcecConfTypeMaster;
+        return;
+      }
       break;
     case emcecConfTypeDcConf:
-    case emcecConfTypeWatchdog:
-      currConfType = emcecConfTypeSlave;
+      if (strcmp(el, "dcConf") == 0) {
+        currConfType = emcecConfTypeSlave;
+        return;
+      }
       break;
-    default:
-      fprintf(stderr, "%s: ERROR: unexpected close tag %s found\n", modname, el);
-      XML_StopParser(parser, 0);
+    case emcecConfTypeWatchdog:
+      if (strcmp(el, "watchdog") == 0) {
+        currConfType = emcecConfTypeSlave;
+        return;
+      }
+      break;
+    case emcecConfTypeSdoConfig:
+      if (strcmp(el, "sdoConfig") == 0) {
+        currConfType = emcecConfTypeSlave;
+        return;
+      }
+      break;
+    case emcecConfTypeSdoDataRaw:
+      if (strcmp(el, "sdoDataRaw") == 0) {
+        currConfType = emcecConfTypeSdoConfig;
+        return;
+      }
+      break;
+    case emcecConfTypeSyncManager:
+      if (strcmp(el, "syncManager") == 0) {
+        currConfType = emcecConfTypeSlave;
+        return;
+      }
+      break;
+    case emcecConfTypePdo:
+      if (strcmp(el, "pdo") == 0) {
+        currConfType = emcecConfTypeSyncManager;
+        return;
+      }
+      break;
+    case emcecConfTypePdoEntry:
+      if (strcmp(el, "pdoEntry") == 0) {
+        currConfType = emcecConfTypePdo;
+        return;
+      }
+      break;
   }
+
+  fprintf(stderr, "%s: ERROR: unexpected close tag %s found\n", modname, el);
+  XML_StopParser(parser, 0);
 }
 
 void *getOutputBuffer(size_t len) {
@@ -369,6 +475,52 @@ void *getOutputBuffer(size_t len) {
   memset(p, 0, len);
   outputBufferPos += len;
   return p;
+}
+
+int parseHexdump(const char *str, uint8_t *buf) {
+  char c;
+  int len = 0;
+  int nib = 0;
+  uint8_t val = 0;
+
+  while (1) {
+    c = *(str++);
+
+    // check for seperator or end of string
+    if (c == 0 || c == ' ') {
+      if (nib > 0) {
+        if (buf != NULL) {
+          *(buf++) = val;
+        }
+        len++;
+        nib = 0;
+        val = 0;
+      }
+      if (c == 0) {
+        return len;
+      }
+      continue;
+    }
+
+    // get nibble value
+    if (c >= '0' && c <= '9') {
+      c = c - '0';
+    } else if (c >= 'a' && c <= 'f') {
+      c = c - 'a' + 10;
+    } else if (c >= 'A' && c <= 'F') {
+      c = c - 'A' + 10;
+    } else {
+      return -1;
+    }
+
+    // allow only byte length
+    if (nib >= 2) {
+      return -1;
+    }
+
+    val = (val << 4) + c;
+    nib++;
+  }
 }
 
 void parseMasterAttrs(const char **attr) {
@@ -462,6 +614,27 @@ void parseSlaveAttrs(const char **attr) {
       strncpy(p->name, val, EMCEC_CONF_STR_MAXLEN);
       p->name[EMCEC_CONF_STR_MAXLEN - 1] = 0;
       continue;
+    }
+
+    // generic only attributes
+    if (p->type == emcecSlaveTypeGeneric) {
+      // parse vid (hex value)
+      if (strcmp(name, "vid") == 0) {
+        p->vid = strtol(val, NULL, 16);
+        continue;
+      }
+
+      // parse pid (hex value)
+      if (strcmp(name, "pid") == 0) {
+        p->pid = strtol(val, NULL, 16);
+        continue;
+      }
+
+      // parse configPdos
+      if (strcmp(name, "configPdos") == 0) {
+        p->configPdos = (strcasecmp(val, "true") == 0);
+        continue;
+      }
     }
 
     // handle error
@@ -562,6 +735,324 @@ void parseWatchdogAttrs(const char **attr) {
     XML_StopParser(parser, 0);
     return;
   }
+}
+
+void parseSdoConfigAttrs(const char **attr) {
+  int tmp;
+  EMCEC_CONF_SDOCONF_T *p = getOutputBuffer(sizeof(EMCEC_CONF_SDOCONF_T));
+  if (p == NULL) {
+    return;
+  }
+
+  p->confType = emcecConfTypeSdoConfig;
+  p->index = 0xffff;
+  p->subindex = 0xff;
+  while (*attr) {
+    const char *name = *(attr++);
+    const char *val = *(attr++);
+
+    // parse index
+    if (strcmp(name, "idx") == 0) {
+      tmp = strtol(val, NULL, 16);
+      if (tmp < 0 || tmp >= 0xffff) {
+        fprintf(stderr, "%s: ERROR: Invalid sdoConfig idx %d\n", modname, tmp);
+        XML_StopParser(parser, 0);
+        return;
+      } 
+      p->index = tmp;
+      continue;
+    }
+
+    // parse subIdx
+    if (strcmp(name, "subIdx") == 0) {
+      if (strcasecmp(val, "complete") == 0) {
+        p->subindex = EMCEC_CONF_SDO_COMPLETE_SUBIDX;
+        continue;
+      }
+      tmp = strtol(val, NULL, 16);
+      if (tmp < 0 || tmp >= 0xff) {
+        fprintf(stderr, "%s: ERROR: Invalid sdoConfig subIdx %d\n", modname, tmp);
+        XML_StopParser(parser, 0);
+        return;
+      } 
+      p->subindex = tmp;
+      continue;
+    }
+
+    // handle error
+    fprintf(stderr, "%s: ERROR: Invalid sdoConfig attribute %s\n", modname, name);
+    XML_StopParser(parser, 0);
+    return;
+  }
+
+  // idx is required
+  if (p->index == 0xffff) {
+    fprintf(stderr, "%s: ERROR: sdoConfig has no idx attribute\n", modname);
+    XML_StopParser(parser, 0);
+    return;
+  }
+
+  // subIdx is required
+  if (p->subindex == 0xff) {
+    fprintf(stderr, "%s: ERROR: sdoConfig has no subIdx attribute\n", modname);
+    XML_StopParser(parser, 0);
+    return;
+  }
+
+  currSdoConf = p;
+  currSlave->sdoConfigLength += sizeof(EMCEC_CONF_SDOCONF_T);
+}
+
+void parseSdoDataRawAttrs(const char **attr) {
+  int len;
+  uint8_t *p;
+
+  while (*attr) {
+    const char *name = *(attr++);
+    const char *val = *(attr++);
+
+    // parse data
+    if (strcmp(name, "data") == 0) {
+      len = parseHexdump(val, NULL);
+      if (len < 0) {
+        fprintf(stderr, "%s: ERROR: Invalid sdoDataRaw data\n", modname);
+        XML_StopParser(parser, 0);
+        return;
+      }
+      if (len > 0) {
+        p = (uint8_t *) getOutputBuffer(len);
+        if (p != NULL) {
+          parseHexdump(val, p);
+          currSdoConf->length += len;
+          currSlave->sdoConfigLength += len;
+        }
+      } 
+      continue;
+    }
+
+    // handle error
+    fprintf(stderr, "%s: ERROR: Invalid pdoEntry attribute %s\n", modname, name);
+    XML_StopParser(parser, 0);
+    return;
+  }
+}
+
+void parseSyncManagerAttrs(const char **attr) {
+  int tmp;
+  EMCEC_CONF_SYNCMANAGER_T *p = getOutputBuffer(sizeof(EMCEC_CONF_SYNCMANAGER_T));
+  if (p == NULL) {
+    return;
+  }
+
+  p->confType = emcecConfTypeSyncManager;
+  p->index = 0xff;
+  p->dir = EC_DIR_INVALID;
+  while (*attr) {
+    const char *name = *(attr++);
+    const char *val = *(attr++);
+
+    // parse index
+    if (strcmp(name, "idx") == 0) {
+      tmp = atoi(val);
+      if (tmp < 0 || tmp >= EC_MAX_SYNC_MANAGERS) {
+        fprintf(stderr, "%s: ERROR: Invalid syncManager idx %d\n", modname, tmp);
+        XML_StopParser(parser, 0);
+        return;
+      } 
+      p->index = tmp;
+      continue;
+    }
+
+    // parse dir
+    if (strcmp(name, "dir") == 0) {
+      if (strcasecmp(val, "in") == 0) {
+        p->dir = EC_DIR_INPUT;
+        continue;
+      }
+      if (strcasecmp(val, "out") == 0) {
+        p->dir = EC_DIR_OUTPUT;
+        continue;
+      }
+      fprintf(stderr, "%s: ERROR: Invalid syncManager dir %s\n", modname, val);
+      XML_StopParser(parser, 0);
+      return;
+    }
+
+    // handle error
+    fprintf(stderr, "%s: ERROR: Invalid syncManager attribute %s\n", modname, name);
+    XML_StopParser(parser, 0);
+    return;
+  }
+
+  // idx is required
+  if (p->index == 0xff) {
+    fprintf(stderr, "%s: ERROR: syncManager has no idx attribute\n", modname);
+    XML_StopParser(parser, 0);
+    return;
+  }
+
+  // dir is required
+  if (p->dir == EC_DIR_INVALID) {
+    fprintf(stderr, "%s: ERROR: syncManager has no dir attribute\n", modname);
+    XML_StopParser(parser, 0);
+    return;
+  }
+
+  (currSlave->syncManagerCount)++;
+  currSyncManager = p;
+}
+
+void parsePdoAttrs(const char **attr) {
+  int tmp;
+  EMCEC_CONF_PDO_T *p = getOutputBuffer(sizeof(EMCEC_CONF_PDO_T));
+  if (p == NULL) {
+    return;
+  }
+
+  p->confType = emcecConfTypePdo;
+  p->index = 0xffff;
+  while (*attr) {
+    const char *name = *(attr++);
+    const char *val = *(attr++);
+
+    // parse index
+    if (strcmp(name, "idx") == 0) {
+      tmp = strtol(val, NULL, 16);
+      if (tmp < 0 || tmp >= 0xffff) {
+        fprintf(stderr, "%s: ERROR: Invalid pdo idx %d\n", modname, tmp);
+        XML_StopParser(parser, 0);
+        return;
+      } 
+      p->index = tmp;
+      continue;
+    }
+
+    // handle error
+    fprintf(stderr, "%s: ERROR: Invalid pdo attribute %s\n", modname, name);
+    XML_StopParser(parser, 0);
+    return;
+  }
+
+  // idx is required
+  if (p->index == 0xffff) {
+    fprintf(stderr, "%s: ERROR: pdo has no idx attribute\n", modname);
+    XML_StopParser(parser, 0);
+    return;
+  }
+
+  (currSlave->pdoCount)++;
+  (currSyncManager->pdoCount)++;
+  currPdo = p;
+}
+
+void parsePdoEntryAttrs(const char **attr) {
+  int tmp;
+  EMCEC_CONF_PDOENTRY_T *p = getOutputBuffer(sizeof(EMCEC_CONF_PDOENTRY_T));
+  if (p == NULL) {
+    return;
+  }
+
+  p->confType = emcecConfTypePdoEntry;
+  p->index = 0xffff;
+  p->subindex = 0xff;
+  while (*attr) {
+    const char *name = *(attr++);
+    const char *val = *(attr++);
+
+    // parse index
+    if (strcmp(name, "idx") == 0) {
+      tmp = strtol(val, NULL, 16);
+      if (tmp < 0 || tmp >= 0xffff) {
+        fprintf(stderr, "%s: ERROR: Invalid pdoEntry idx %d\n", modname, tmp);
+        XML_StopParser(parser, 0);
+        return;
+      } 
+      p->index = tmp;
+      continue;
+    }
+
+    // parse subIdx
+    if (strcmp(name, "subIdx") == 0) {
+      tmp = strtol(val, NULL, 16);
+      if (tmp < 0 || tmp >= 0xff) {
+        fprintf(stderr, "%s: ERROR: Invalid pdoEntry subIdx %d\n", modname, tmp);
+        XML_StopParser(parser, 0);
+        return;
+      } 
+      p->subindex = tmp;
+      continue;
+    }
+
+    // parse bitLen
+    if (strcmp(name, "bitLen") == 0) {
+      tmp = atoi(val);
+      if (tmp <= 0 || tmp > 32) {
+        fprintf(stderr, "%s: ERROR: Invalid pdoEntry bitLen %d\n", modname, tmp);
+        XML_StopParser(parser, 0);
+        return;
+      } 
+      p->bitLength = tmp;
+      continue;
+    }
+
+    // parse halType
+    if (strcmp(name, "halType") == 0) {
+      if (strcasecmp(val, "bit") == 0) {
+        p->halType = HAL_BIT;
+        continue;
+      }
+      if (strcasecmp(val, "s32") == 0) {
+        p->halType = HAL_S32;
+        continue;
+      }
+      if (strcasecmp(val, "u32") == 0) {
+        p->halType = HAL_U32;
+        continue;
+      }
+      fprintf(stderr, "%s: ERROR: Invalid pdoEntry halType %s\n", modname, val);
+      XML_StopParser(parser, 0);
+      return;
+    }
+
+    // parse halPin
+    if (strcmp(name, "halPin") == 0) {
+      strncpy(p->halPin, val, EMCEC_CONF_STR_MAXLEN);
+      p->halPin[EMCEC_CONF_STR_MAXLEN - 1] = 0;
+      continue;
+    }
+
+    // handle error
+    fprintf(stderr, "%s: ERROR: Invalid pdoEntry attribute %s\n", modname, name);
+    XML_StopParser(parser, 0);
+    return;
+  }
+
+  // idx is required
+  if (p->index == 0xffff) {
+    fprintf(stderr, "%s: ERROR: pdoEntry has no idx attribute\n", modname);
+    XML_StopParser(parser, 0);
+    return;
+  }
+
+  // subIdx is required
+  if (p->subindex == 0xff) {
+    fprintf(stderr, "%s: ERROR: pdoEntry has no subIdx attribute\n", modname);
+    XML_StopParser(parser, 0);
+    return;
+  }
+
+  // bitLen is required
+  if (p->bitLength == 0) {
+    fprintf(stderr, "%s: ERROR: pdoEntry has no bitLen attribute\n", modname);
+    XML_StopParser(parser, 0);
+    return;
+  }
+
+  (currSlave->pdoEntryCount)++;
+  if (p->halPin[0] != 0) {
+    (currSlave->pdoMappingCount)++;
+  }
+  (currPdo->pdoEntryCount)++;
 }
 
 int parseSyncCycle(const char *nptr) {

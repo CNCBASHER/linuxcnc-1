@@ -61,11 +61,15 @@ typedef struct {
   hal_bit_t *brake;
   hal_bit_t *index_ena;
   hal_bit_t *pos_reset;
+  hal_s32_t *enc_raw;
+  hal_bit_t *on_home_neg;
+  hal_bit_t *on_home_pos;
 
   hal_float_t speed_max_rpm;
   hal_float_t speed_max_rpm_sp;
   hal_float_t torque_fb_scale;
   hal_float_t pos_scale;
+  hal_s32_t home_raw;
   double speed_max_rpm_sp_rcpt;
 
   double pos_scale_old;
@@ -163,6 +167,10 @@ int emcec_stmds5k_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_
     rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-vel-rpm failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
+  if ((err = hal_pin_s32_newf(HAL_OUT, &(hal_data->enc_raw), comp_id, "%s.%s.%s.srv-enc-raw", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-enc-raw failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
+    return err;
+  }
   if ((err = hal_pin_u32_newf(HAL_OUT, &(hal_data->pos_raw_hi), comp_id, "%s.%s.%s.srv-pos-raw-hi", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
     rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-pos-raw-hi failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
@@ -235,6 +243,14 @@ int emcec_stmds5k_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_
     rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-pos-reset failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
+  if ((err = hal_pin_bit_newf(HAL_OUT, &(hal_data->on_home_neg), comp_id, "%s.%s.%s.srv-on-home-neg", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-on-home-neg failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
+    return err;
+  }
+  if ((err = hal_pin_bit_newf(HAL_OUT, &(hal_data->on_home_pos), comp_id, "%s.%s.%s.srv-on-home-pos", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-on-home-pos failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
+    return err;
+  }
 
   // export parameters
   if ((err = hal_param_float_newf(HAL_RW, &(hal_data->pos_scale), comp_id, "%s.%s.%s.srv-pos-scale", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
@@ -251,6 +267,10 @@ int emcec_stmds5k_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_
   }
   if ((err = hal_param_float_newf(HAL_RO, &(hal_data->speed_max_rpm_sp), comp_id, "%s.%s.%s.srv-max-rpm-sp", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
     rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-max-rpm-sp failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
+    return err;
+  }
+  if ((err = hal_param_s32_newf(HAL_RW, &(hal_data->home_raw), comp_id, "%s.%s.%s.srv-home-raw", EMCEC_MODULE_NAME, master->name, slave->name)) != 0) {
+    rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-home-raw failed\n", EMCEC_MODULE_NAME, master->name, slave->name);
     return err;
   }
 
@@ -277,6 +297,9 @@ int emcec_stmds5k_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_
   *(hal_data->brake) = 0;
   *(hal_data->index_ena) = 0;
   *(hal_data->pos_reset) = 0;
+  *(hal_data->enc_raw) = 0;
+  *(hal_data->on_home_neg) = 0;
+  *(hal_data->on_home_pos) = 0;
 
   // initialize variables
   hal_data->pos_scale = 1.0;
@@ -290,6 +313,7 @@ int emcec_stmds5k_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_
   hal_data->pos_scale_cnt = 1.0;
   hal_data->last_index_ena = 0;
   hal_data->index_ref = 0;
+  hal_data->home_raw = 0;
 
   return 0;
 }
@@ -354,7 +378,11 @@ void emcec_stmds5k_read(struct emcec_slave *slave, long period) {
   *(hal_data->torque_fb) = (double)torque_raw * STMDS5K_TORQUE_DIV * hal_data->torque_fb_scale;
 
   // update raw position counter
-  pos_cnt = EC_READ_S32(&pd[hal_data->pos_mot_pdo_os]) << 8;
+  pos_cnt = EC_READ_S32(&pd[hal_data->pos_mot_pdo_os]);
+  *(hal_data->enc_raw) = pos_cnt;
+  *(hal_data->on_home_neg) = (pos_cnt <= hal_data->home_raw);
+  *(hal_data->on_home_pos) = (pos_cnt >= hal_data->home_raw);
+  pos_cnt <<= 8;
   pos_cnt_diff = pos_cnt - hal_data->last_pos_cnt;
   hal_data->last_pos_cnt = pos_cnt;
   hal_data->pos_cnt += pos_cnt_diff;

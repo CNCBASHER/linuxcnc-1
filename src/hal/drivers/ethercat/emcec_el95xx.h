@@ -15,19 +15,23 @@
 //    along with this program; if not, write to the Free Software
 //    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
 //
-#ifndef _EMCEC_EL7342_H_
-#define _EMCEC_EL7342_H_
+#ifndef _EMCEC_EL95XX_H_
+#define _EMCEC_EL95XX_H_
 
 #include <linux/ctype.h>
 #include "emcec.h"
 
-#define EMCEC_EL7342_VID EMCEC_BECKHOFF_VID
-#define EMCEC_EL7342_PID 0x1cae3052
+#define EMCEC_EL95xx_VID EMCEC_BECKHOFF_VID
 
-#define EMCEC_EL7342_CHANS 2
-#define EMCEC_EL7342_PDOS  (33 * EMCEC_EL7342_CHANS)
+#define EMCEC_EL9505_PID 0x25213052
+#define EMCEC_EL9508_PID 0x25243052
+#define EMCEC_EL9510_PID 0x25263052
+#define EMCEC_EL9512_PID 0x25283052
+#define EMCEC_EL9515_PID 0x252b3052
 
-int emcec_el7342_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t *pdo_entry_regs);
+#define EMCEC_EL95xx_PDOS 2
+
+int emcec_el95xx_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t *pdo_entry_regs);
 
 #endif
 

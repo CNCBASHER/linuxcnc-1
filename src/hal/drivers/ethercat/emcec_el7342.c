@@ -26,6 +26,21 @@
 #include "emcec.h"
 #include "emcec_el7342.h"
 
+
+#define INFO_SEL_STATUS_WORD   0
+#define INFO_SEL_MOTOR_VOLT    1
+#define INFO_SEL_MOTOR_CURR    2
+#define INFO_SEL_CURR_LIMIT    3
+#define INFO_SEL_CTRL_ERR      4
+#define INFO_SEL_DUTY_CYCLE    5
+#define INFO_SEL_MOTOR_VELO    7
+#define INFO_SEL_OVERLOAD_TIME 8
+#define INFO_SEL_INT_TEMP      101
+#define INFO_SEL_CTRL_VOLT     103
+#define INFO_SEL_SUPP_VOLT     104
+#define INFO_SEL_DCM_SWORD     150
+#define INFO_SEL_DCM_STATE     151
+
 typedef struct {
   hal_bit_t *reset;
   hal_bit_t *ina;
@@ -69,6 +84,12 @@ typedef struct {
   hal_bit_t *dcm_din2;
   hal_bit_t *dcm_sync_err;
   hal_bit_t *dcm_tx_toggle;
+  hal_s32_t *dcm_raw_info1;
+  hal_s32_t *dcm_raw_info2;
+  hal_u32_t *dcm_sel_info1;
+  hal_u32_t *dcm_sel_info2;
+  hal_float_t *dcm_velo_fb;
+  hal_float_t *dcm_current_fb;
 
   int set_count_pdo_os;
   int set_count_pdo_bp;
@@ -129,6 +150,8 @@ typedef struct {
   int dcm_sync_err_pdo_bp;
   int dcm_tx_toggle_pdo_os;
   int dcm_tx_toggle_pdo_bp;
+  int dcm_info1_pdo_os;
+  int dcm_info2_pdo_os;
 
   int enc_do_init;
   int16_t enc_last_count;
@@ -136,6 +159,10 @@ typedef struct {
   double enc_scale_recip;
   double dcm_old_scale;
   double dcm_scale_recip;
+
+  ec_sdo_request_t *sdo_info1_select;
+  ec_sdo_request_t *sdo_info2_select;
+
 } emcec_el7342_chan_t;
 
 typedef struct {
@@ -244,6 +271,11 @@ static ec_pdo_entry_info_t emcec_el7342_channel1_dcm_in[] = {
     {0x1806, 0x09,  1}  // TxPDO Toggle
 };
 
+static ec_pdo_entry_info_t emcec_el7342_channel1_dcm_sync_info[] = {
+    {0x6020, 0x11,  16}, // Synchronous information 1
+    {0x6020, 0x12,  16}  // Synchronous information 2
+};
+
 static ec_pdo_entry_info_t emcec_el7342_channel2_dcm_in[] = {
     {0x6030, 0x01,  1}, // Ready to enable
     {0x6030, 0x02,  1}, // Ready
@@ -261,6 +293,11 @@ static ec_pdo_entry_info_t emcec_el7342_channel2_dcm_in[] = {
     {0x1808, 0x09,  1}  // TxPDO Toggle
 };
 
+static ec_pdo_entry_info_t emcec_el7342_channel2_dcm_sync_info[] = {
+    {0x6030, 0x11,  16}, // Synchronous information 1
+    {0x6030, 0x12,  16}  // Synchronous information 2
+};
+
 static ec_pdo_info_t emcec_el7342_pdos_out[] = {
     {0x1600,  7, emcec_el7342_channel1_enc_out},
     {0x1602,  7, emcec_el7342_channel2_enc_out},
@@ -274,25 +311,30 @@ static ec_pdo_info_t emcec_el7342_pdos_in[] = {
     {0x1a00, 17, emcec_el7342_channel1_enc_in},
     {0x1a03, 17, emcec_el7342_channel2_enc_in},
     {0x1a06, 14, emcec_el7342_channel1_dcm_in},
-    {0x1a08, 14, emcec_el7342_channel2_dcm_in}
+    {0x1a07,  2, emcec_el7342_channel1_dcm_sync_info},
+    {0x1a08, 14, emcec_el7342_channel2_dcm_in},
+    {0x1a09,  2, emcec_el7342_channel2_dcm_sync_info},
 };
 
 static ec_sync_info_t emcec_el7342_syncs[] = {
     {0, EC_DIR_OUTPUT, 0, NULL},
     {1, EC_DIR_INPUT,  0, NULL},
     {2, EC_DIR_OUTPUT, 6, emcec_el7342_pdos_out},
-    {3, EC_DIR_INPUT,  4, emcec_el7342_pdos_in},
+    {3, EC_DIR_INPUT,  6, emcec_el7342_pdos_in},
     {0xff}
 };
 
 void emcec_el7342_read(struct emcec_slave *slave, long period);
 void emcec_el7342_write(struct emcec_slave *slave, long period);
 
+void emcec_el7342_set_info(emcec_el7342_chan_t *chan, hal_s32_t *raw_info, hal_u32_t *sel_info);
+
 int emcec_el7342_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t *pdo_entry_regs) {
   emcec_master_t *master = slave->master;
   emcec_el7342_data_t *hal_data;
   int i;
   emcec_el7342_chan_t *chan;
+  uint8_t info1_select, info2_select;
   int err;
 
   // initialize callbacks
@@ -307,7 +349,7 @@ int emcec_el7342_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
   memset(hal_data, 0, sizeof(emcec_el7342_data_t));
   slave->hal_data = hal_data;
 
-  // initializer sync info
+  // initialize sync info
   slave->sync_info = emcec_el7342_syncs;
 
   // initialize global data
@@ -316,6 +358,18 @@ int emcec_el7342_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
   // initialize pins
   for (i=0; i<EMCEC_EL7342_CHANS; i++) {
     chan = &hal_data->chans[i];
+
+    // read sdos
+    // Info1 selector
+    if ((chan->sdo_info1_select = emcec_read_sdo(slave, 0x8022 + (i << 4), 0x11, 1)) == NULL) {
+      return -EIO;
+    }
+    info1_select = EC_READ_U8(ecrt_sdo_request_data(chan->sdo_info1_select));
+    // Info2 selector
+    if ((chan->sdo_info2_select = emcec_read_sdo(slave, 0x8022 + (i << 4), 0x19, 1)) == NULL) {
+      return -EIO;
+    }
+    info2_select = EC_READ_U8(ecrt_sdo_request_data(chan->sdo_info2_select));
 
     // initialize POD entries
     EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x6000 + (i << 4), 0x02, &chan->latch_ext_valid_pdo_os, &chan->latch_ext_valid_pdo_bp);
@@ -345,7 +399,9 @@ int emcec_el7342_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
     EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x6020 + (i << 4), 0x0c, &chan->dcm_din1_pdo_os, &chan->dcm_din1_pdo_bp);
     EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x6020 + (i << 4), 0x0d, &chan->dcm_din2_pdo_os, &chan->dcm_din2_pdo_bp);
     EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x1c32           , 0x20, &chan->dcm_sync_err_pdo_os, &chan->dcm_sync_err_pdo_bp);
-    EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x1806 + (i << 2), 0x09, &chan->dcm_tx_toggle_pdo_os, &chan->dcm_tx_toggle_pdo_bp);
+    EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x1806 + (i << 1), 0x09, &chan->dcm_tx_toggle_pdo_os, &chan->dcm_tx_toggle_pdo_bp);
+    EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x6020 + (i << 4), 0x11, &chan->dcm_info1_pdo_os, NULL);
+    EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x6020 + (i << 4), 0x12, &chan->dcm_info2_pdo_os, NULL);
     EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x7020 + (i << 4), 0x01, &chan->dcm_ena_pdo_os, &chan->dcm_ena_pdo_bp);
     EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x7020 + (i << 4), 0x02, &chan->dcm_reset_pdo_os, &chan->dcm_reset_pdo_bp);
     EMCEC_PDO_INIT(pdo_entry_regs, slave->index, slave->vid, slave->pid, 0x7020 + (i << 4), 0x03, &chan->dcm_reduce_torque_pdo_os, &chan->dcm_reduce_torque_pdo_bp);
@@ -462,8 +518,8 @@ int emcec_el7342_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
       rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-%d-value failed\n", EMCEC_MODULE_NAME, master->name, slave->name, i);
       return err;
     }
-    if ((err = hal_pin_s32_newf(HAL_OUT, &(chan->dcm_raw_val), comp_id, "%s.%s.%s.srv-%d-raw", EMCEC_MODULE_NAME, master->name, slave->name, i)) != 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-%d-raw failed\n", EMCEC_MODULE_NAME, master->name, slave->name, i);
+    if ((err = hal_pin_s32_newf(HAL_OUT, &(chan->dcm_raw_val), comp_id, "%s.%s.%s.srv-%d-raw-cmd", EMCEC_MODULE_NAME, master->name, slave->name, i)) != 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-%d-raw-cmd failed\n", EMCEC_MODULE_NAME, master->name, slave->name, i);
       return err;
     }
     if ((err = hal_pin_bit_newf(HAL_IN, &(chan->dcm_reset), comp_id, "%s.%s.%s.srv-%d-reset", EMCEC_MODULE_NAME, master->name, slave->name, i)) != 0) {
@@ -518,6 +574,34 @@ int emcec_el7342_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
       rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-%d-tx-toggle failed\n", EMCEC_MODULE_NAME, master->name, slave->name, i);
       return err;
     }
+    if ((err = hal_pin_s32_newf(HAL_OUT, &(chan->dcm_raw_info1), comp_id, "%s.%s.%s.srv-%d-raw-info1", EMCEC_MODULE_NAME, master->name, slave->name, i)) != 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-%d-raw-info1 failed\n", EMCEC_MODULE_NAME, master->name, slave->name, i);
+      return err;
+    }
+    if ((err = hal_pin_s32_newf(HAL_OUT, &(chan->dcm_raw_info2), comp_id, "%s.%s.%s.srv-%d-raw-info2", EMCEC_MODULE_NAME, master->name, slave->name, i)) != 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-%d-raw-info2 failed\n", EMCEC_MODULE_NAME, master->name, slave->name, i);
+      return err;
+    }
+    if ((err = hal_pin_u32_newf(HAL_OUT, &(chan->dcm_sel_info1), comp_id, "%s.%s.%s.srv-%d-sel-info1", EMCEC_MODULE_NAME, master->name, slave->name, i)) != 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-%d-sel-info1 failed\n", EMCEC_MODULE_NAME, master->name, slave->name, i);
+      return err;
+    }
+    if ((err = hal_pin_u32_newf(HAL_OUT, &(chan->dcm_sel_info2), comp_id, "%s.%s.%s.srv-%d-sel-info2", EMCEC_MODULE_NAME, master->name, slave->name, i)) != 0) {
+      rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.srv-%d-sel-info2 failed\n", EMCEC_MODULE_NAME, master->name, slave->name, i);
+      return err;
+    }
+    if (info1_select == INFO_SEL_MOTOR_VELO || info2_select == INFO_SEL_MOTOR_VELO) {
+      if ((err = hal_pin_float_newf(HAL_OUT, &(chan->dcm_velo_fb), comp_id, "%s.%s.%s.srv-%d-velo-fb", EMCEC_MODULE_NAME, master->name, slave->name, i)) != 0) {
+        rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.enc-%d-velo-fb failed\n", EMCEC_MODULE_NAME, master->name, slave->name, i);
+        return err;
+      }
+    }
+    if (info1_select == INFO_SEL_MOTOR_CURR || info2_select == INFO_SEL_MOTOR_CURR) {
+      if ((err = hal_pin_float_newf(HAL_OUT, &(chan->dcm_current_fb), comp_id, "%s.%s.%s.srv-%d-current-fb", EMCEC_MODULE_NAME, master->name, slave->name, i)) != 0) {
+        rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.enc-%d-current-fb failed\n", EMCEC_MODULE_NAME, master->name, slave->name, i);
+        return err;
+      }
+    }
 
     // initialize pins
     *(chan->reset) = 0;
@@ -548,7 +632,7 @@ int emcec_el7342_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
     *(chan->dcm_enable) = 0;
     *(chan->dcm_absmode) = 0;
     *(chan->dcm_value) = 0.0;
-    *(chan->dcm_raw_val) = 0.0;
+    *(chan->dcm_raw_val) = 0;
     *(chan->dcm_reset) = 0;
     *(chan->dcm_reduce_torque) = 0;
     *(chan->dcm_ready_to_enable) = 0;
@@ -562,6 +646,16 @@ int emcec_el7342_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
     *(chan->dcm_din2) = 0;
     *(chan->dcm_sync_err) = 0;
     *(chan->dcm_tx_toggle) = 0;
+    *(chan->dcm_raw_info1) = 0;
+    *(chan->dcm_raw_info2) = 0;
+    *(chan->dcm_sel_info1) = info1_select;
+    *(chan->dcm_sel_info2) = info2_select;
+    if (chan->dcm_velo_fb != NULL) {
+      *(chan->dcm_velo_fb) = 0.0;
+    }
+    if (chan->dcm_current_fb != NULL) {
+      *(chan->dcm_current_fb) = 0.0;
+    }
 
     // initialize variables
     chan->enc_do_init = 1;
@@ -633,6 +727,14 @@ void emcec_el7342_read(struct emcec_slave *slave, long period) {
     // read raw values
     raw_count = EC_READ_S16(&pd[chan->count_pdo_os]);
     raw_latch = EC_READ_S16(&pd[chan->latch_pdo_os]);
+
+    // read raw info values
+    *(chan->dcm_raw_info1) = EC_READ_S16(&pd[chan->dcm_info1_pdo_os]);
+    *(chan->dcm_raw_info2) = EC_READ_S16(&pd[chan->dcm_info2_pdo_os]);
+
+    // dispatch info values
+    emcec_el7342_set_info(chan, chan->dcm_raw_info1, chan->dcm_sel_info1);
+    emcec_el7342_set_info(chan, chan->dcm_raw_info2, chan->dcm_sel_info2);
 
     // check for operational change of slave
     if (!hal_data->last_operational) {
@@ -761,7 +863,18 @@ void emcec_el7342_write(struct emcec_slave *slave, long period) {
     EC_WRITE_BIT(&pd[chan->dcm_reset_pdo_os], chan->dcm_reset_pdo_bp, *(chan->dcm_reset));
     EC_WRITE_BIT(&pd[chan->dcm_reduce_torque_pdo_os], chan->dcm_reduce_torque_pdo_bp, *(chan->dcm_reduce_torque));
     EC_WRITE_S16(&pd[chan->dcm_velo_pdo_os], (int16_t)raw_val);
+  }
+}
 
+void emcec_el7342_set_info(emcec_el7342_chan_t *chan, hal_s32_t *raw_info, hal_u32_t *sel_info) {
+  switch(*sel_info) {
+    case INFO_SEL_MOTOR_VELO:
+      *(chan->dcm_velo_fb) = (double) *raw_info * 0.0001 * chan->dcm_old_scale;
+      break;
+
+    case INFO_SEL_MOTOR_CURR:
+      *(chan->dcm_current_fb) = (double) *raw_info * 0.001;
+      break;
   }
 }
 

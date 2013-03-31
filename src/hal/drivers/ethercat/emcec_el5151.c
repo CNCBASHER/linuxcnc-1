@@ -379,12 +379,14 @@ void emcec_el5151_read(struct emcec_slave *slave, long period) {
   if (*(hal_data->latch_ext_valid)) {
     *(hal_data->raw_latch) = raw_latch;
     hal_data->last_count = raw_latch;
+    *(hal_data->count) = 0;
     *(hal_data->ena_latch_ext_pos) = 0;
     *(hal_data->ena_latch_ext_neg) = 0;
   }
   if (*(hal_data->latch_c_valid)) {
     *(hal_data->raw_latch) = raw_latch;
     hal_data->last_count = raw_latch;
+    *(hal_data->count) = 0;
     *(hal_data->ena_latch_c) = 0;
   }
   

@@ -42,7 +42,6 @@ typedef struct {
   hal_float_t *pos_scale;
   hal_float_t *pos;
   hal_float_t *period;
-  hal_u32_t virt_idx_modulo;
 
   int set_count_pdo_os;
   int set_count_pdo_bp;
@@ -63,10 +62,6 @@ typedef struct {
   int do_init;
   int32_t last_count;
   int last_index;
-  int last_index_ena;
-  uint32_t virt_idx_int;
-  uint32_t virt_idx_mod_old;
-  int32_t virt_idx_zero;
   double old_scale;
   double scale;
 } emcec_el5152_chan_t;
@@ -258,12 +253,6 @@ int emcec_el5152_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
       return err;
     }
 
-    // export parameters
-    if ((err = hal_param_u32_newf(HAL_RW, &(chan->virt_idx_modulo), comp_id, "%s.%s.%s.enc-%d-virt-idx-mod", EMCEC_MODULE_NAME, master->name, slave->name, i)) != 0) {
-      rtapi_print_msg(RTAPI_MSG_ERR, EMCEC_MSG_PFX "exporting pin %s.%s.%s.enc-%d-virt-idx-mod failed\n", EMCEC_MODULE_NAME, master->name, slave->name, i);
-      return err;
-    }
-
     // initialize pins
     *(chan->index) = 0;
     *(chan->index_ena) = 0;
@@ -281,19 +270,12 @@ int emcec_el5152_init(int comp_id, struct emcec_slave *slave, ec_pdo_entry_reg_t
     *(chan->period) = 0;
     *(chan->pos_scale) = 1.0;
 
-    // initialize parameters
-    chan->virt_idx_modulo = 0;
-
     // initialize variables
     chan->do_init = 1;
     chan->last_count = 0;
     chan->last_index = 0;
-    chan->last_index_ena = 0;
     chan->old_scale = *(chan->pos_scale) + 1.0;
     chan->scale = 1.0;
-    chan->virt_idx_int = 0;
-    chan->virt_idx_mod_old = 0;
-    chan->virt_idx_zero = 0;
   }
 
   return 0;
@@ -306,7 +288,6 @@ void emcec_el5152_read(struct emcec_slave *slave, long period) {
   int i, idx_flag;
   emcec_el5152_chan_t *chan;
   int32_t idx_count, raw_count, raw_period, raw_delta;
-  uint32_t idx_tmp;
 
   // wait for slave to be operational
   if (!slave->state.operational) {
@@ -329,13 +310,6 @@ void emcec_el5152_read(struct emcec_slave *slave, long period) {
       chan->old_scale = *(chan->pos_scale);
       // we actually want the reciprocal
       chan->scale = 1.0 / *(chan->pos_scale);
-    }
-
-    // check for change in virtual index modulo
-    if (chan->virt_idx_modulo != chan->virt_idx_mod_old) {
-      idx_tmp = (1 << 31) / chan->virt_idx_modulo;
-      chan->virt_idx_zero = idx_tmp * chan->virt_idx_modulo;
-      chan->virt_idx_mod_old = chan->virt_idx_modulo;
     }
 
     // get bit states
@@ -368,26 +342,10 @@ void emcec_el5152_read(struct emcec_slave *slave, long period) {
     // check for index edge
     idx_flag = 0;
     idx_count = 0;
-    if (chan->virt_idx_modulo != 0) {
-      if (*(chan->index_ena)) {
-        idx_tmp = (uint32_t)(raw_count + chan->virt_idx_zero) / chan->virt_idx_modulo;
-        if (chan->do_init || !chan->last_index_ena) {
-          chan->virt_idx_int = idx_tmp;
-        } else if (idx_tmp  > chan->virt_idx_int) {
-          idx_flag = 1;
-        } else if (idx_tmp  < chan->virt_idx_int) {
-          idx_tmp = chan->virt_idx_int;
-          idx_flag = 1;
-        }
-        idx_count = (int32_t)(idx_tmp * chan->virt_idx_modulo) - chan->virt_idx_zero;
-      }
-    } else {
-      if (*(chan->index) && !chan->last_index) {
-        idx_count = raw_count;
-        idx_flag = 1;
-      }
+    if (*(chan->index) && !chan->last_index) {
+      idx_count = raw_count;
+      idx_flag = 1;
     }
-    chan->last_index_ena = *(chan->index_ena);
     chan->last_index = *(chan->index);
 
     // handle initialization
@@ -401,6 +359,7 @@ void emcec_el5152_read(struct emcec_slave *slave, long period) {
     // handle index
     if (idx_flag && *(chan->index_ena)) {
       chan->last_count = idx_count;
+      *(chan->count) = 0;
       *(chan->index_ena) = 0;
     }
     
